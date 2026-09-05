@@ -17,6 +17,7 @@ class VoiceinkSource < Formula
   end
 
   depends_on macos: :sequoia
+  depends_on arch: :arm64
   depends_on "cmake" => :build
 
   def disable_sparkle_for_local_build
@@ -77,6 +78,38 @@ class VoiceinkSource < Formula
     ENV["DEVELOPER_DIR"] = full_xcode_developer_dir.to_s
   end
 
+  def build_macos_only_whisper(whisper_framework)
+    resource("whisper-cpp").stage do
+      upstream_script = Pathname("build-xcframework.sh").read
+      platform_marker = "echo \"Building for iOS simulator...\""
+      raise "whisper build script layout changed; review the macOS-only extraction" unless upstream_script.include?(platform_marker)
+
+      common_functions = upstream_script.split(platform_marker, 2).first
+      macos_script = <<~SH
+        #{common_functions}
+
+        echo "Building macOS-only whisper.xcframework..."
+        cmake -B build-macos -G Xcode "__DOLLAR__{COMMON_CMAKE_ARGS[@]}" -DCMAKE_OSX_DEPLOYMENT_TARGET=__DOLLAR__{MACOS_MIN_OS_VERSION} -DCMAKE_OSX_SYSROOT="__DOLLAR__(xcrun --sdk macosx --show-sdk-path)" -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_C_FLAGS="__DOLLAR__{COMMON_C_FLAGS}" -DCMAKE_CXX_FLAGS="__DOLLAR__{COMMON_CXX_FLAGS}" -DWHISPER_COREML="ON" -DWHISPER_COREML_ALLOW_FALLBACK="ON" -S .
+        cmake --build build-macos --config Release -- -quiet
+
+        setup_framework_structure "build-macos" __DOLLAR__{MACOS_MIN_OS_VERSION} "macos"
+        combine_static_libraries "build-macos" "Release" "macos" "false"
+
+        mkdir -p build-apple
+        xcodebuild -create-xcframework -framework "$(pwd)/build-macos/framework/whisper.framework" -debug-symbols "$(pwd)/build-macos/dSYMs/whisper.dSYM" -output "$(pwd)/build-apple/whisper.xcframework"
+      SH
+      macos_script = macos_script.gsub("__DOLLAR__", "$")
+
+      macos_script_path = Pathname("build-macos-only.sh")
+      macos_script_path.write(macos_script)
+      chmod 0755, macos_script_path
+      system "./build-macos-only.sh"
+
+      whisper_framework.dirname.mkpath
+      cp_r "build-apple/whisper.xcframework", whisper_framework.dirname
+    end
+  end
+
   def install
     disable_sparkle_for_local_build
 
@@ -90,11 +123,7 @@ class VoiceinkSource < Formula
       ENV["HOME"] = buildpath.to_s
 
       whisper_framework = buildpath / "VoiceInk-Dependencies/whisper.cpp/build-apple/whisper.xcframework"
-      resource("whisper-cpp").stage do
-        system "./build-xcframework.sh"
-        whisper_framework.dirname.mkpath
-        cp_r "build-apple/whisper.xcframework", whisper_framework.dirname
-      end
+      build_macos_only_whisper(whisper_framework)
 
       system "make", "local", "LOCAL_CODESIGN_IDENTITY=-"
     ensure

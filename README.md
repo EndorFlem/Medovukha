@@ -94,8 +94,9 @@ Medovukha/
 `Formula/voiceink-source.rb`:
 
 - downloads a GitHub archive pinned to `VOICEINK_UPSTREAM_REVISION`;
-- builds a pinned Whisper resource instead of cloning `whisper.cpp` from a
-  moving branch during the formula build;
+- builds a pinned macOS-only Whisper resource instead of cloning `whisper.cpp`
+  from a moving branch or attempting unnecessary iOS/tvOS/visionOS slices;
+- resolves the macOS SDK through the selected full Xcode bundle;
 - sets `LOCAL_BUILD` through the upstream `make local` target;
 - forces ad-hoc signing so an Apple Developer certificate is not required;
 - points `HOME` at the Homebrew build directory only while `make local` is
