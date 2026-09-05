@@ -67,10 +67,10 @@ class VoiceinkSource < Formula
   end
 
   def use_installed_full_xcode
-    return if ENV["DEVELOPER_DIR"] && !ENV["DEVELOPER_DIR"].empty?
-
     full_xcode_developer_dir = Pathname("/Applications/Xcode.app/Contents/Developer")
     return unless full_xcode_developer_dir.directory?
+    return if ENV["DEVELOPER_DIR"] && !ENV["DEVELOPER_DIR"].empty? &&
+              ENV["DEVELOPER_DIR"] != "/Library/Developer/CommandLineTools"
 
     # xcode-select may point at the CLT shim even when the full Xcode bundle
     # is installed. Prefer that bundle for the formula build unless the user
@@ -92,7 +92,7 @@ class VoiceinkSource < Formula
     sdk_path
   end
 
-  def build_macos_only_whisper(whisper_framework, clang_path, clangxx_path, macos_sdk_path)
+  def build_macos_only_whisper(whisper_framework, developer_dir, clang_path, clangxx_path, macos_sdk_path)
     resource("whisper-cpp").stage do
       upstream_script = Pathname("build-xcframework.sh").read
       platform_marker = "echo \"Building for iOS simulator...\""
@@ -103,6 +103,10 @@ class VoiceinkSource < Formula
         #{common_functions}
 
         echo "Building macOS-only whisper.xcframework..."
+        export DEVELOPER_DIR="#{developer_dir}"
+        export SDKROOT="#{macos_sdk_path}"
+        export CC="#{clang_path}"
+        export CXX="#{clangxx_path}"
         cmake -B build-macos -G Xcode "__DOLLAR__{COMMON_CMAKE_ARGS[@]}" -DCMAKE_C_COMPILER="#{clang_path}" -DCMAKE_CXX_COMPILER="#{clangxx_path}" -DCMAKE_OSX_DEPLOYMENT_TARGET=__DOLLAR__{MACOS_MIN_OS_VERSION} -DCMAKE_OSX_SYSROOT="#{macos_sdk_path}" -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_C_FLAGS="__DOLLAR__{COMMON_C_FLAGS}" -DCMAKE_CXX_FLAGS="__DOLLAR__{COMMON_CXX_FLAGS}" -DWHISPER_COREML="ON" -DWHISPER_COREML_ALLOW_FALLBACK="ON" -S .
         cmake --build build-macos --config Release -- -quiet
 
@@ -139,6 +143,7 @@ class VoiceinkSource < Formula
       whisper_framework = buildpath / "VoiceInk-Dependencies/whisper.cpp/build-apple/whisper.xcframework"
       build_macos_only_whisper(
         whisper_framework,
+        ENV["DEVELOPER_DIR"].to_s,
         xcrun_tool("clang"),
         xcrun_tool("clang++"),
         xcrun_sdk_path("macosx"),
