@@ -1,0 +1,55 @@
+name: Test VoiceInk source formula
+
+on:
+  push:
+    paths:
+      - "Formula/voiceink-source.rb"
+      - "scripts/**"
+      - ".github/workflows/test-voiceink-source.yml"
+  pull_request:
+    paths:
+      - "Formula/voiceink-source.rb"
+      - "scripts/**"
+      - ".github/workflows/test-voiceink-source.yml"
+  schedule:
+    - cron: "47 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: voiceink-source-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 90
+
+    steps:
+      - name: Check out tap
+        uses: actions/checkout@v5
+
+      - name: Check Ruby syntax
+        run: |
+          ruby -c Formula/voiceink-source.rb
+          ruby -c scripts/update-voiceink-formula.rb
+
+      - name: Build and install formula
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+        run: >-
+          brew install --build-from-source --formula --verbose
+          "$GITHUB_WORKSPACE/Formula/voiceink-source.rb"
+
+      - name: Run formula test
+        run: brew test --verbose voiceink-source
+
+      - name: Inspect installed app without launching it
+        run: |
+          app="$(brew --prefix voiceink-source)/libexec/VoiceInk.app"
+          test -d "$app"
+          test -f "$app/Contents/Info.plist"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/Info.plist")" = "com.prakashjoshipax.VoiceInk"
+          /usr/bin/codesign --verify --deep --strict "$app"
