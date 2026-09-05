@@ -50,8 +50,16 @@ Required host tools:
 - Apple Silicon;
 - macOS Sequoia or newer;
 - full Xcode with its macOS SDK and Swift toolchain;
+- Xcode's Metal Toolchain component;
 - Command Line Tools, including Git and Make;
 - Homebrew CMake.
+
+If Xcode reports a missing Metal Toolchain, install the component once:
+
+~~~sh
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
+  xcodebuild -downloadComponent MetalToolchain
+~~~
 
 The installer automatically selects /Applications/Xcode.app when xcode-select
 currently points only at Command Line Tools. An explicit developer directory

@@ -71,6 +71,8 @@ cask "voiceink-source" do
       fi
     fi
     xcodebuild -version >/dev/null 2>&1 || die "Full Xcode is required. Set DEVELOPER_DIR to an Xcode developer directory."
+    /usr/bin/xcrun metal --version >/dev/null 2>&1 || \
+      die "Metal Toolchain is missing. Run: DEVELOPER_DIR=$DEVELOPER_DIR xcodebuild -downloadComponent MetalToolchain"
 
     source_root=''
     if [ -f "$staged_root/Makefile" ]; then
