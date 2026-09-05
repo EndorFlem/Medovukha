@@ -204,6 +204,16 @@ cask "voiceink-source" do
     }
     mv "$updater_tmp" "$updater_file"
 
+    project_file="$source_root/VoiceInk.xcodeproj/project.pbxproj"
+    [ -f "$project_file" ] || die "VoiceInk Xcode project file not found"
+    project_whisper_pattern='path = "$(HOME)/VoiceInk-Dependencies/whisper.cpp/build-apple/whisper.xcframework";'
+    grep -Fq "$project_whisper_pattern" "$project_file" || \
+      die "VoiceInk Whisper framework reference changed; refusing an unverified path patch"
+    project_whisper_expression="s|path = \"\$(HOME)/VoiceInk-Dependencies/whisper.cpp/build-apple/whisper.xcframework\";|path = \"$whisper_framework\";|"
+    sed -i '' -e "$project_whisper_expression" "$project_file"
+    grep -Fq "path = \"$whisper_framework\";" "$project_file" || \
+      die "Failed to point VoiceInk at the cached Whisper framework"
+
     # Xcode 26.2 ships Swift 6.2.1. The current mlx-swift package selected by
     # this VoiceInk snapshot requires Swift tools 6.3, so keep the last
     # 0.31.x package whose manifest is accepted by Xcode 26.2.
@@ -243,8 +253,6 @@ cask "voiceink-source" do
             ;;
         esac
 
-        project_file="$source_root/VoiceInk.xcodeproj/project.pbxproj"
-        [ -f "$project_file" ] || die "VoiceInk Xcode project file not found"
         mlx_lm_block="$(sed -n '/"identity" : "mlx-swift-lm"/,/^    }/p' "$resolved_file")"
         mlx_lm_revision="$(printf '%s\n' "$mlx_lm_block" | sed -n 's/.*"revision" : "\([^"]*\)".*/\1/p')"
         case "$mlx_lm_revision" in
