@@ -78,21 +78,7 @@ class VoiceinkSource < Formula
     ENV["DEVELOPER_DIR"] = full_xcode_developer_dir.to_s
   end
 
-  def xcrun_tool(tool_name)
-    tool_path = Utils.safe_popen_read("xcrun", "--sdk", "macosx", "--find", tool_name).strip
-    raise "Xcode tool not found through xcrun: #{tool_name}" if tool_path.empty?
-
-    tool_path
-  end
-
-  def xcrun_sdk_path(sdk_name)
-    sdk_path = Utils.safe_popen_read("xcrun", "--sdk", sdk_name, "--show-sdk-path").strip
-    raise "Xcode SDK not found through xcrun: #{sdk_name}" if sdk_path.empty?
-
-    sdk_path
-  end
-
-  def build_macos_only_whisper(whisper_framework, developer_dir, clang_path, clangxx_path, macos_sdk_path)
+  def build_macos_only_whisper(whisper_framework, developer_dir)
     resource("whisper-cpp").stage do
       upstream_script = Pathname("build-xcframework.sh").read
       platform_marker = "echo \"Building for iOS simulator...\""
@@ -104,10 +90,16 @@ class VoiceinkSource < Formula
 
         echo "Building macOS-only whisper.xcframework..."
         export DEVELOPER_DIR="#{developer_dir}"
-        export SDKROOT="#{macos_sdk_path}"
-        export CC="#{clang_path}"
-        export CXX="#{clangxx_path}"
-        cmake -B build-macos -G Xcode "__DOLLAR__{COMMON_CMAKE_ARGS[@]}" -DCMAKE_C_COMPILER="#{clang_path}" -DCMAKE_CXX_COMPILER="#{clangxx_path}" -DCMAKE_OSX_DEPLOYMENT_TARGET=__DOLLAR__{MACOS_MIN_OS_VERSION} -DCMAKE_OSX_SYSROOT="#{macos_sdk_path}" -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_C_FLAGS="__DOLLAR__{COMMON_C_FLAGS}" -DCMAKE_CXX_FLAGS="__DOLLAR__{COMMON_CXX_FLAGS}" -DWHISPER_COREML="ON" -DWHISPER_COREML_ALLOW_FALLBACK="ON" -S .
+        export SDKROOT="$("/usr/bin/xcrun" --sdk macosx --show-sdk-path)"
+        export CC="$("/usr/bin/xcrun" --sdk macosx --find clang)"
+        export CXX="$("/usr/bin/xcrun" --sdk macosx --find clang++)"
+        test -x "$CC"
+        test -x "$CXX"
+        test -d "$SDKROOT"
+        echo "Using C compiler: $CC"
+        echo "Using CXX compiler: $CXX"
+        echo "Using macOS SDK: $SDKROOT"
+        cmake -B build-macos -G Xcode "__DOLLAR__{COMMON_CMAKE_ARGS[@]}" -DCMAKE_C_COMPILER="$CC" -DCMAKE_CXX_COMPILER="$CXX" -DCMAKE_OSX_DEPLOYMENT_TARGET=__DOLLAR__{MACOS_MIN_OS_VERSION} -DCMAKE_OSX_SYSROOT="$SDKROOT" -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_C_FLAGS="__DOLLAR__{COMMON_C_FLAGS}" -DCMAKE_CXX_FLAGS="__DOLLAR__{COMMON_CXX_FLAGS}" -DWHISPER_COREML="ON" -DWHISPER_COREML_ALLOW_FALLBACK="ON" -S .
         cmake --build build-macos --config Release -- -quiet
 
         setup_framework_structure "build-macos" __DOLLAR__{MACOS_MIN_OS_VERSION} "macos"
@@ -144,9 +136,6 @@ class VoiceinkSource < Formula
       build_macos_only_whisper(
         whisper_framework,
         ENV["DEVELOPER_DIR"].to_s,
-        xcrun_tool("clang"),
-        xcrun_tool("clang++"),
-        xcrun_sdk_path("macosx"),
       )
 
       system "make", "local", "LOCAL_CODESIGN_IDENTITY=-"
