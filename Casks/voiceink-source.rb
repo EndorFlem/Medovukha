@@ -227,6 +227,21 @@ cask "voiceink-source" do
             die "No Xcode 26.2 compatibility pin for mlx-swift version: ${mlx_version:-unknown}"
             ;;
         esac
+
+        syntax_block="$(sed -n '/"identity" : "swift-syntax"/,/^    }/p' "$resolved_file")"
+        syntax_version="$(printf '%s\n' "$syntax_block" | sed -n 's/.*"version" : "\([^"]*\)".*/\1/p')"
+        case "$syntax_version" in
+          602.0.0)
+            ;;
+          603.0.0|603.0.1|603.0.2)
+            sed -i '' \
+              -e '/"identity" : "swift-syntax"/,/^    }/ { s/"revision" : "[0-9a-f]\{40\}"/"revision" : "4799286537280063c85a32f09884cfbca301b1a1"/; s/"version" : "[^"]*"/"version" : "602.0.0"/; }' \
+              "$resolved_file"
+            ;;
+          *)
+            die "No Xcode 26.2 compatibility pin for swift-syntax version: ${syntax_version:-unknown}"
+            ;;
+        esac
         ;;
     esac
 

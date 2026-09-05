@@ -22,8 +22,8 @@ The installer:
 - builds the pinned macOS-only Whisper framework;
 - runs make local with ad-hoc signing;
 - compiles VoiceInk with Sparkle's updater disabled;
-- on Swift 6.2.1/Xcode 26.2, pins mlx-swift to 0.31.4, whose manifest is
-  compatible with that toolchain;
+- on Swift 6.2.1/Xcode 26.2, pins mlx-swift to 0.31.4 and swift-syntax to
+  602.0.0, whose manifests are compatible with that toolchain;
 - installs the result as ~/Applications/VoiceInk-local.app;
 - keeps build caches and rollback backups under
   ~/Library/Application Support/VoiceInkTap;
@@ -67,9 +67,10 @@ logic. The tap does not delete Command Line Tools or require the destructive
 sudo rm -rf /Library/Developer/CommandLineTools workaround.
 
 For Xcode 26.2 the installer also forces Xcode to use the committed SwiftPM
-versions and applies the known mlx-swift 0.31.4 compatibility pin. If a future
-VoiceInk commit changes that dependency to an unknown incompatible version,
-the installer stops instead of silently building a different dependency graph.
+versions and applies the known mlx-swift 0.31.4 and swift-syntax 602.0.0
+compatibility pins. If a future VoiceInk commit changes either dependency to
+an unknown incompatible version, the installer stops instead of silently
+building a different dependency graph.
 
 ## Updates
 
