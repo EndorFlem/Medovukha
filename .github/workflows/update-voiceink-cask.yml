@@ -1,0 +1,39 @@
+name: Update VoiceInk source cask
+
+on:
+  schedule:
+    - cron: "17 */4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-voiceink-cask
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out tap
+        uses: actions/checkout@v5
+
+      - name: Update VoiceInk cask
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ruby scripts/update-voiceink-cask.rb
+
+      - name: Commit and push changes
+        run: |
+          if git diff --quiet -- Casks/voiceink-source.rb; then
+            echo "VoiceInk cask is already current."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Casks/voiceink-source.rb
+          git commit -m "voiceink: update source cask"
+          git push

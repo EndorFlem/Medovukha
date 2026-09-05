@@ -1,166 +1,117 @@
-# `Medovukha`: VoiceInk source formula
+# Medovukha
 
-This tap builds the free, local VoiceInk source tree from `Beingpax/VoiceInk`.
-It never uses the official `voiceink` cask or its precompiled commercial
-binary.
+Personal Homebrew tap for packages built or maintained by EndorFlem.
+VoiceInk is the first package; other formulae and casks can be added to this
+same repository later.
 
-This repository is hosted as:
+## VoiceInk source build
 
-```text
-github.com/EndorFlem/Medovukha
-```
+This tap builds the free VoiceInk source tree from Beingpax/VoiceInk. It does
+not use the official paid voiceink cask or its precompiled binary.
 
-`Medovukha` is a general personal tap, not a repository for only VoiceInk.
-Other formulae and casks can be added next to this one.
+The package is intentionally a cask rather than a formula. Homebrew formula
+builds run inside Homebrew's sandbox, while VoiceInk's local build resolves
+SwiftPM dependencies and invokes Xcode tools that need to manage their own
+cache and sandbox. That combination failed with sandbox_apply. A cask
+installer script is the supported Homebrew escape hatch for this kind of
+installer and runs outside the cask sandbox.
 
-## User workflow
+The installer:
 
-Because the GitHub repository does not use Homebrew's conventional
-`homebrew-*` name, register it with an explicit remote URL:
+- downloads an archive pinned to one exact VoiceInk commit;
+- builds the pinned macOS-only Whisper framework;
+- runs make local with ad-hoc signing;
+- compiles VoiceInk with Sparkle's updater disabled;
+- installs the result as ~/Applications/VoiceInk-local.app;
+- keeps build caches and rollback backups under
+  ~/Library/Application Support/VoiceInkTap;
+- does not remove VoiceInk user data.
 
-```sh
+## Installation
+
+This repository is named Medovukha, not homebrew-medovukha, so add the
+explicit SSH remote:
+
+~~~sh
 brew tap EndorFlem/medovukha git@github.com:EndorFlem/Medovukha.git
 brew install EndorFlem/medovukha/voiceink-source
-```
+~~~
 
-The one-argument form `brew tap EndorFlem/medovukha` would look for a
-repository named `homebrew-medovukha`, so do not use it for this repository.
+The local checkout used to maintain the tap is:
 
-The formula installs the app bundle inside its Homebrew prefix and installs a
-launcher on `PATH`:
+~~~text
+~/.taps/Medovukha/
+~~~
 
-```sh
-voiceink-source
-voiceink-source --path
-voiceink-source --version
-```
+Required host tools:
 
-The app lives at:
+- Apple Silicon;
+- macOS Sequoia or newer;
+- full Xcode with its macOS SDK and Swift toolchain;
+- Command Line Tools, including Git and Make;
+- Homebrew CMake.
 
-```text
-$(brew --prefix voiceink-source)/libexec/VoiceInk.app
-```
+The installer automatically selects /Applications/Xcode.app when xcode-select
+currently points only at Command Line Tools. An explicit developer directory
+still works:
 
-The formula does not copy anything to `/Applications`. That keeps Homebrew in
-control of the versioned bundle and avoids colliding with the paid
-`/Applications/VoiceInk.app` cask.
+~~~sh
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
+  brew install EndorFlem/medovukha/voiceink-source
+~~~
 
-## Updating
+An Xcode-version warning from Homebrew is separate from the source-build
+logic. The tap does not delete Command Line Tools or require the destructive
+sudo rm -rf /Library/Developer/CommandLineTools workaround.
 
-The normal update path is:
+## Updates
 
-```sh
+Once installed from the tap, the normal update command is:
+
+~~~sh
 brew upgrade
-```
+~~~
 
-Homebrew first refreshes the tap metadata during a normal upgrade. The
-scheduled workflow updates the formula when `Beingpax/VoiceInk` gets a new
-commit on `main`.
+The scheduled GitHub Action runs every four hours. It reads the latest commit
+on Beingpax/VoiceInk main, downloads that commit archive, calculates its
+SHA256, and updates the cask's revision, version, and archive checksum. A
+changed version is then visible to ordinary brew upgrade, which runs the
+installer again and rebuilds the app locally.
 
-The formula version has this shape. The time component keeps two commits from
-the same day ordered for Homebrew's version comparison.
+The version format is:
 
-```text
-YYYY.MM.DD.HHMMSS-<first-eight-hex-digits-of-commit>
-```
+~~~text
+YYYY.MM.DD.HHMMSS-<first-eight-commit-hex-digits>
+~~~
 
-The source archive URL and SHA256 are pinned to the same full commit. A new
-commit therefore becomes a new Homebrew version and `brew upgrade` rebuilds
-the formula.
+There is no HEAD formula and no brew upgrade --fetch-HEAD step.
 
-If `HOMEBREW_NO_AUTO_UPDATE` is set in the shell, run `brew update` before
-`brew upgrade`; otherwise no manual tap update is needed.
+If Homebrew auto-update is disabled in your shell, refresh the tap explicitly:
+
+~~~sh
+brew update
+brew upgrade
+~~~
 
 ## Repository layout
 
-The local checkout is kept at:
-
-```text
-~/.taps/Medovukha/
-```
-
-```text
+~~~text
 Medovukha/
-├── Formula/voiceink-source.rb
-├── scripts/update-voiceink-formula.rb
-├── .github/workflows/update-voiceink-formula.yml
+├── Casks/voiceink-source.rb
+├── scripts/update-voiceink-cask.rb
+├── .github/workflows/update-voiceink-cask.yml
 ├── .github/workflows/test-voiceink-source.yml
 ├── .gitignore
 └── README.md
-```
+~~~
 
-## Formula build
+update-voiceink-cask.yml needs repository Contents: Read and write permission
+for the workflow token. If branch protection disallows direct workflow pushes,
+change the final step to create a pull request instead.
 
-`Formula/voiceink-source.rb`:
+## CI build test
 
-- downloads a GitHub archive pinned to `VOICEINK_UPSTREAM_REVISION`;
-- builds a pinned macOS-only Whisper resource instead of cloning `whisper.cpp`
-  from a moving branch or attempting unnecessary iOS/tvOS/visionOS slices;
-- resolves the macOS SDK through the selected full Xcode bundle;
-- sets `LOCAL_BUILD` through the upstream `make local` target;
-- forces ad-hoc signing so an Apple Developer certificate is not required;
-- points `HOME` at the Homebrew build directory only while `make local` is
-  running, keeping Whisper and build output out of the user's home directory;
-- disables the Sparkle updater in the local build at compile time, so the
-  source build cannot replace itself with the commercial release;
-- installs `VoiceInk.app` under `libexec` and a stable `voiceink-source`
-  launcher under `bin`;
-- fails if the upstream updater source moves and the safety patch no longer
-  matches.
-
-The current upstream project requires full Xcode with Command Line Tools,
-CMake, macOS 15 or later, Apple Silicon, and the Git command supplied by the
-Command Line Tools. Homebrew provides CMake, but it cannot provide Xcode or
-Apple's signing tools.
-
-If `xcode-select -p` points to `/Library/Developer/CommandLineTools` while
-`/Applications/Xcode.app` exists, the formula automatically sets
-`DEVELOPER_DIR` to the installed full Xcode bundle for the build. You can
-override that choice explicitly:
-
-```sh
-DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
-  brew install EndorFlem/medovukha/voiceink-source
-```
-
-Homebrew may still print a diagnostic saying that Xcode 26.2 is older than
-26.3. That diagnostic is separate from the formula's build command. The
-formula does not remove CLT or require the destructive `sudo rm` workaround.
-
-The Whisper resource is pinned separately from the VoiceInk commit. If a
-future VoiceInk commit needs a newer Whisper API, update that resource and
-its SHA256 deliberately, then let the macOS build workflow prove the result.
-
-## Scheduled formula updater
-
-`.github/workflows/update-voiceink-formula.yml` runs every four hours and can
-also be started with `workflow_dispatch`. It:
-
-1. reads the current `main` commit from `Beingpax/VoiceInk`;
-2. reads `VOICEINK_UPSTREAM_REVISION` from the formula;
-3. downloads the commit archive and calculates its SHA256;
-4. fetches the commit date;
-5. updates the revision, version, and SHA256;
-6. commits and pushes only when the revision changed.
-
-The workflow needs repository `Contents: Read and write` permission. Branch
-protection rules must also allow the workflow token to push, or the final
-push step must be changed to open a pull request instead.
-
-## Build test
-
-`.github/workflows/test-voiceink-source.yml` runs on `macos-15` when the
-formula changes, once per day, or through `workflow_dispatch`. It runs the
-actual Homebrew formula install, `brew test`, bundle metadata checks, and
-code-signature verification. It never launches VoiceInk.
-
-The same checks can be run manually after publishing the tap:
-
-```sh
-brew style --formula Formula/voiceink-source.rb
-brew install --build-from-source --formula --verbose ./Formula/voiceink-source.rb
-brew test --verbose voiceink-source
-```
-
-The Homebrew build and test can take several minutes because `make local`
-also builds the Whisper framework.
+The macOS workflow checks Ruby syntax and performs the actual cask install on
+macos-15, then verifies the bundle identifier and code signature. It never
+launches VoiceInk. The build is intentionally expensive because it compiles
+Whisper and VoiceInk from source.

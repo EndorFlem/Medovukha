@@ -10,7 +10,7 @@ require "uri"
 
 UPSTREAM_REPOSITORY = "Beingpax/VoiceInk"
 UPSTREAM_URL = "https://github.com/#{UPSTREAM_REPOSITORY}.git"
-FORMULA_PATH = File.expand_path("../Formula/voiceink-source.rb", __dir__)
+CASK_PATH = File.expand_path("../Casks/voiceink-source.rb", __dir__)
 
 def fail_with(message)
   warn "Error: #{message}"
@@ -81,13 +81,13 @@ rescue JSON::ParserError => e
   fail_with("invalid GitHub API response: #{e.message}")
 end
 
-formula = File.read(FORMULA_PATH)
-current_revision_match = formula.match(/VOICEINK_UPSTREAM_REVISION\s*=\s*"([0-9a-f]{40})"/)
-fail_with("formula has no VOICEINK_UPSTREAM_REVISION") if current_revision_match.nil?
+cask = File.read(CASK_PATH)
+current_revision_match = cask.match(/VOICEINK_UPSTREAM_REVISION\s*=\s*"([0-9a-f]{40})"/)
+fail_with("cask has no VOICEINK_UPSTREAM_REVISION") if current_revision_match.nil?
 
 latest_revision = current_main_revision
 if current_revision_match[1] == latest_revision
-  puts "VoiceInk formula is already at #{latest_revision}."
+  puts "VoiceInk cask is already at #{latest_revision}."
   exit 0
 end
 
@@ -99,7 +99,7 @@ archive_sha256 = Digest::SHA256.hexdigest(http_get(
   { "User-Agent" => "voiceink-homebrew-local" },
 ))
 
-updated = formula.dup
+updated = cask.dup
 updated.sub!(/(VOICEINK_UPSTREAM_REVISION\s*=\s*")[0-9a-f]{40}(")/) do
   "#{Regexp.last_match(1)}#{latest_revision}#{Regexp.last_match(2)}"
 end
@@ -110,17 +110,17 @@ updated.sub!(/(^[ \t]*sha256[ \t]+")[0-9a-f]{64}(")/) do
   "#{Regexp.last_match(1)}#{archive_sha256}#{Regexp.last_match(2)}"
 end
 
-fail_with("formula update markers were incomplete") if updated == formula
+fail_with("cask update markers were incomplete") if updated == cask
 
-temporary_path = "#{FORMULA_PATH}.tmp.#{$$}"
+temporary_path = "#{CASK_PATH}.tmp.#{$$}"
 begin
   File.write(temporary_path, updated)
-  File.rename(temporary_path, FORMULA_PATH)
+  File.rename(temporary_path, CASK_PATH)
 ensure
   File.delete(temporary_path) if File.file?(temporary_path)
 end
 
-puts "Updated VoiceInk formula."
+puts "Updated VoiceInk cask."
 puts "  revision: #{latest_revision}"
 puts "  version:  #{version}"
 puts "  sha256:   #{archive_sha256}"
