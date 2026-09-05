@@ -318,6 +318,14 @@ cask "voiceink-source" do
     }
     mv "$makefile_tmp" "$makefile"
 
+    # Ad-hoc signatures have no Team ID. Permit the local app and its XPC
+    # service to load their bundled frameworks under Hardened Runtime.
+    local_entitlements="$source_root/VoiceInk/VoiceInk.local.entitlements"
+    [ -f "$local_entitlements" ] || die "VoiceInk local entitlements not found"
+    /usr/libexec/PlistBuddy -c "Set :com.apple.security.cs.disable-library-validation true" "$local_entitlements" 2>/dev/null || \
+      /usr/libexec/PlistBuddy -c "Add :com.apple.security.cs.disable-library-validation bool true" "$local_entitlements"
+    /usr/bin/plutil -lint "$local_entitlements"
+
     (cd "$source_root" && make local LOCAL_CODESIGN_IDENTITY=-)
     built_app="$HOME/Downloads/VoiceInk.app"
     [ -d "$built_app" ] || die "make local did not produce $built_app"
