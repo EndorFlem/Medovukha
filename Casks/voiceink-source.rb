@@ -207,7 +207,8 @@ cask "voiceink-source" do
     # Xcode 26.2 ships Swift 6.2.1. The current mlx-swift package selected by
     # this VoiceInk snapshot requires Swift tools 6.3, so keep the last
     # 0.31.x package whose manifest is accepted by Xcode 26.2.
-    swift_version="$(swift --version | awk 'NR == 1 { print $3 }')"
+    swift_version="$(swift --version | sed -n 's/.*Apple Swift version \([0-9][0-9.]*\).*/\1/p')"
+    [ -n "$swift_version" ] || die "Could not determine Swift toolchain version"
     case "$swift_version" in
       5.*|6.[012].*)
         resolved_file="$source_root/VoiceInk.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
