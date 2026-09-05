@@ -21,7 +21,7 @@ The installer:
 - downloads an archive pinned to one exact VoiceInk commit;
 - builds the pinned macOS-only Whisper framework;
 - runs make local with ad-hoc signing;
-- compiles VoiceInk with Sparkle's updater disabled;
+- compiles VoiceInk without the Sparkle package or updater metadata;
 - on Swift 6.2.1/Xcode 26.2, pins mlx-swift to 0.31.4 and swift-syntax to
   602.0.0, whose manifests are compatible with that toolchain;
 - installs the result as ~/Applications/VoiceInk-local.app;
