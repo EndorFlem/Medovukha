@@ -72,6 +72,11 @@ compatibility pins. If a future VoiceInk commit changes either dependency to
 an unknown incompatible version, the installer stops instead of silently
 building a different dependency graph.
 
+The local build passes xcodebuild's skipMacroValidation flag only for this
+pinned VoiceInk build. This avoids changing Xcode's macro-validation policy
+globally; the trade-off is that the source and all SwiftPM revisions in the
+build must be trusted.
+
 ## Updates
 
 Once installed from the tap, the normal update command is:

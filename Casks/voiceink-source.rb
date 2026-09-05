@@ -278,6 +278,7 @@ cask "voiceink-source" do
         sub(/^[[:space:]]*/, "", line)
         if (!inserted && index(line, "xcodebuild -project VoiceInk.xcodeproj -scheme VoiceInk -configuration Release") == 1) {
           print
+          print "\t\t-skipMacroValidation \\"
           print "\t\t-disableAutomaticPackageResolution \\"
           print "\t\t-onlyUsePackageVersionsFromResolvedFile \\"
           inserted = 1
