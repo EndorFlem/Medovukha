@@ -216,51 +216,9 @@ cask "voiceink-source" do
     grep -Fq "path = \"$whisper_framework\";" "$project_file" || \
       die "Failed to point VoiceInk at the cached Whisper framework"
 
-    # LOCAL_BUILD does not use Sparkle. Remove its package/product reference
-    # and update metadata so the local app cannot launch the commercial
-    # updater or carry its feed/signing keys.
-    sparkle_project_tmp="$project_file.sparkle-local.tmp.$$"
-    awk '
-      BEGIN { skip = 0 }
-      {
-        if (skip) {
-          if ($0 == "\t\t};") {
-            skip = 0
-          }
-          next
-        }
-        if (index($0, "E1ADD45D2CC544F100303ECB") > 0) {
-          if (index($0, " = {") > 0) {
-            skip = 1
-          }
-          next
-        }
-        if (index($0, "E1ADD45E2CC544F100303ECB") > 0) {
-          if (index($0, " = {") > 0) {
-            skip = 1
-          }
-          next
-        }
-        if (index($0, "E1ADD45F2CC544F100303ECB") > 0) {
-          next
-        }
-        print
-      }
-      END {
-        if (skip) {
-          exit 42
-        }
-      }
-    ' "$project_file" > "$sparkle_project_tmp" || {
-      /bin/rm -f "$sparkle_project_tmp"
-      die "VoiceInk Sparkle project references changed; refusing an unverified updater removal"
-    }
-    mv "$sparkle_project_tmp" "$project_file"
-    grep -Fq "E1ADD45" "$project_file" && \
-      die "Failed to remove Sparkle from the local Xcode project"
-    grep -Fq "Sparkle" "$project_file" && \
-      die "Sparkle still appears in the local Xcode project"
-
+    # Keep the upstream Sparkle package reference because the Xcode project
+    # uses filesystem-synchronized targets. LOCAL_BUILD excludes its updater
+    # code below; remove its feed/signing metadata from the app as well.
     source_info_plist="$source_root/VoiceInk/Info.plist"
     [ -f "$source_info_plist" ] || die "VoiceInk Info.plist not found"
     for update_key in SUEnableAutomaticChecks SUEnableInstallerLauncherService SUFeedURL SUPublicEDKey SUScheduledCheckInterval; do
