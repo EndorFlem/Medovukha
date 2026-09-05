@@ -93,11 +93,11 @@ Once installed from the tap, the normal update command is:
 brew upgrade
 ~~~
 
-The scheduled GitHub Action runs every four hours. It reads the latest commit
-on Beingpax/VoiceInk main, downloads that commit archive, calculates its
-SHA256, and updates the cask's revision, version, and archive checksum. A
-changed version is then visible to ordinary brew upgrade, which runs the
-installer again and rebuilds the app locally.
+The scheduled GitHub Action runs once a week on Monday at 03:17 UTC. It reads
+the latest commit on Beingpax/VoiceInk main, downloads that commit archive,
+calculates its SHA256, and updates the cask's revision, version, and archive
+checksum. A changed version is then visible to ordinary brew upgrade, which
+runs the installer again and rebuilds the app locally.
 
 The version format is:
 
