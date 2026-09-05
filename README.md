@@ -7,7 +7,7 @@ binary.
 This repository is hosted as:
 
 ```text
-github.com/Endorflem/Medovukha
+github.com/EndorFlem/Medovukha
 ```
 
 `Medovukha` is a general personal tap, not a repository for only VoiceInk.
@@ -19,11 +19,11 @@ Because the GitHub repository does not use Homebrew's conventional
 `homebrew-*` name, register it with an explicit remote URL:
 
 ```sh
-brew tap Endorflem/medovukha git@github.com:Endorflem/Medovukha.git
-brew install Endorflem/medovukha/voiceink-source
+brew tap EndorFlem/medovukha git@github.com:EndorFlem/Medovukha.git
+brew install EndorFlem/medovukha/voiceink-source
 ```
 
-The one-argument form `brew tap Endorflem/medovukha` would look for a
+The one-argument form `brew tap EndorFlem/medovukha` would look for a
 repository named `homebrew-medovukha`, so do not use it for this repository.
 
 The formula installs the app bundle inside its Homebrew prefix and installs a
@@ -72,6 +72,12 @@ If `HOMEBREW_NO_AUTO_UPDATE` is set in the shell, run `brew update` before
 `brew upgrade`; otherwise no manual tap update is needed.
 
 ## Repository layout
+
+The local checkout is kept at:
+
+```text
+~/.taps/Medovukha/
+```
 
 ```text
 Medovukha/
