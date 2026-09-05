@@ -65,6 +65,18 @@ class VoiceinkSource < Formula
     end
   end
 
+  def use_installed_full_xcode
+    return if ENV["DEVELOPER_DIR"] && !ENV["DEVELOPER_DIR"].empty?
+
+    full_xcode_developer_dir = Pathname("/Applications/Xcode.app/Contents/Developer")
+    return unless full_xcode_developer_dir.directory?
+
+    # xcode-select may point at the CLT shim even when the full Xcode bundle
+    # is installed. Prefer that bundle for the formula build unless the user
+    # explicitly selected another developer directory.
+    ENV["DEVELOPER_DIR"] = full_xcode_developer_dir.to_s
+  end
+
   def install
     disable_sparkle_for_local_build
 
@@ -72,7 +84,9 @@ class VoiceinkSource < Formula
     # Downloads build output. Point it at the formula build directory so an
     # install does not write into the user's home directory.
     original_home = ENV["HOME"]
+    original_developer_dir = ENV["DEVELOPER_DIR"]
     begin
+      use_installed_full_xcode
       ENV["HOME"] = buildpath.to_s
 
       whisper_framework = buildpath / "VoiceInk-Dependencies/whisper.cpp/build-apple/whisper.xcframework"
@@ -85,6 +99,7 @@ class VoiceinkSource < Formula
       system "make", "local", "LOCAL_CODESIGN_IDENTITY=-"
     ensure
       ENV["HOME"] = original_home
+      ENV["DEVELOPER_DIR"] = original_developer_dir
     end
 
     built_app = buildpath / "Downloads/VoiceInk.app"

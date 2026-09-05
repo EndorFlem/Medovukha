@@ -107,10 +107,24 @@ Medovukha/
 - fails if the upstream updater source moves and the safety patch no longer
   matches.
 
-The current upstream project requires Xcode with Command Line Tools, CMake,
-macOS 15 or later, Apple Silicon, and the Git command supplied by the Command
-Line Tools. Homebrew provides CMake, but it cannot provide Xcode, Git's Apple
-developer tools, or Apple's signing tools.
+The current upstream project requires full Xcode with Command Line Tools,
+CMake, macOS 15 or later, Apple Silicon, and the Git command supplied by the
+Command Line Tools. Homebrew provides CMake, but it cannot provide Xcode or
+Apple's signing tools.
+
+If `xcode-select -p` points to `/Library/Developer/CommandLineTools` while
+`/Applications/Xcode.app` exists, the formula automatically sets
+`DEVELOPER_DIR` to the installed full Xcode bundle for the build. You can
+override that choice explicitly:
+
+```sh
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
+  brew install EndorFlem/medovukha/voiceink-source
+```
+
+Homebrew may still print a diagnostic saying that Xcode 26.2 is older than
+26.3. That diagnostic is separate from the formula's build command. The
+formula does not remove CLT or require the destructive `sudo rm` workaround.
 
 The Whisper resource is pinned separately from the VoiceInk commit. If a
 future VoiceInk commit needs a newer Whisper API, update that resource and
