@@ -12,6 +12,10 @@ cask "voiceink-source" do
   desc "Free local source build of VoiceInk for macOS"
   homepage "https://github.com/Beingpax/VoiceInk"
 
+  livecheck do
+    skip "Version is managed by the VoiceInk commit updater."
+  end
+
   depends_on macos: :sequoia
   depends_on arch: :arm64
   depends_on formula: "cmake"
