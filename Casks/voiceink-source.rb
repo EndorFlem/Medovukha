@@ -242,6 +242,30 @@ cask "voiceink-source" do
             die "No Xcode 26.2 compatibility pin for swift-syntax version: ${syntax_version:-unknown}"
             ;;
         esac
+
+        project_file="$source_root/VoiceInk.xcodeproj/project.pbxproj"
+        [ -f "$project_file" ] || die "VoiceInk Xcode project file not found"
+        mlx_lm_block="$(sed -n '/"identity" : "mlx-swift-lm"/,/^    }/p' "$resolved_file")"
+        mlx_lm_revision="$(printf '%s\n' "$mlx_lm_block" | sed -n 's/.*"revision" : "\([^"]*\)".*/\1/p')"
+        case "$mlx_lm_revision" in
+          bd4b7434e6bdb588c7ef55706ff8904cb7fd4c57)
+            ;;
+          cd1ab3dd98ceb02d095490aa25e61298ea3e2f5b)
+            sed -i '' \
+              -e '/"identity" : "mlx-swift-lm"/,/^    }/ s/"revision" : "[^"]*"/"revision" : "bd4b7434e6bdb588c7ef55706ff8904cb7fd4c57"/' \
+              "$resolved_file"
+            sed -i '' \
+              -e 's/revision = cd1ab3dd98ceb02d095490aa25e61298ea3e2f5b;/revision = bd4b7434e6bdb588c7ef55706ff8904cb7fd4c57;/' \
+              "$project_file"
+            ;;
+          *)
+            die "No Xcode 26.2 compatibility pin for mlx-swift-lm revision: ${mlx_lm_revision:-unknown}"
+            ;;
+        esac
+        grep -Fq 'revision = bd4b7434e6bdb588c7ef55706ff8904cb7fd4c57;' "$project_file" || \
+          die "Failed to pin mlx-swift-lm in the Xcode project"
+        grep -Fq '"revision" : "bd4b7434e6bdb588c7ef55706ff8904cb7fd4c57"' "$resolved_file" || \
+          die "Failed to pin mlx-swift-lm in Package.resolved"
         ;;
     esac
 
