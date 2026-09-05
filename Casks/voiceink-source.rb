@@ -3,11 +3,11 @@ cask "voiceink-source" do
   sha256 "18a1322c5899fdb43566d839689ea25d31fb5ca013a1306e440b3c0781ea5e68"
 
   # Managed by scripts/update-voiceink-cask.rb.
-  VOICEINK_UPSTREAM_REVISION = "8f089cb4bf2c9c2f217b0cc0af909d9052ff6288"
-  WHISPER_CPP_REVISION = "52a939a2a762224e255d366c1182b2af4dd1a032"
-  WHISPER_CPP_SHA256 = "6212572f00e887698440dbbf87aef27de6e56dbe73907f6148686ec55d584a19"
+  voiceink_upstream_revision = "8f089cb4bf2c9c2f217b0cc0af909d9052ff6288"
+  whisper_cpp_revision = "52a939a2a762224e255d366c1182b2af4dd1a032"
+  whisper_cpp_sha256 = "6212572f00e887698440dbbf87aef27de6e56dbe73907f6148686ec55d584a19"
 
-  url "https://github.com/Beingpax/VoiceInk/archive/#{VOICEINK_UPSTREAM_REVISION}.tar.gz"
+  url "https://github.com/Beingpax/VoiceInk/archive/#{voiceink_upstream_revision}.tar.gz"
   name "VoiceInk source build"
   desc "Free local source build of VoiceInk for macOS"
   homepage "https://github.com/Beingpax/VoiceInk"
@@ -203,6 +203,58 @@ cask "voiceink-source" do
       die "VoiceInk updater layout changed; refusing an unguarded local build"
     }
     mv "$updater_tmp" "$updater_file"
+
+    # Xcode 26.2 ships Swift 6.2.1. The current mlx-swift package selected by
+    # this VoiceInk snapshot requires Swift tools 6.3, so keep the last
+    # 0.31.x package whose manifest is accepted by Xcode 26.2.
+    swift_version="$(swift --version | awk 'NR == 1 { print $3 }')"
+    case "$swift_version" in
+      5.*|6.[012].*)
+        resolved_file="$source_root/VoiceInk.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
+        [ -f "$resolved_file" ] || die "VoiceInk package resolution file not found"
+        mlx_block="$(sed -n '/"identity" : "mlx-swift"/,/^    }/p' "$resolved_file")"
+        mlx_version="$(printf '%s\n' "$mlx_block" | sed -n 's/.*"version" : "\([^"]*\)".*/\1/p')"
+        case "$mlx_version" in
+          0.31.4)
+            ;;
+          0.31.5|0.31.6)
+            sed -i '' \
+              -e '/"identity" : "mlx-swift"/,/^    }/ { s/"revision" : "[0-9a-f]\{40\}"/"revision" : "dc43e62d7055353c7f99fa071a4e71d29dfddc44"/; s/"version" : "[^"]*"/"version" : "0.31.4"/; }' \
+              "$resolved_file"
+            ;;
+          *)
+            die "No Xcode 26.2 compatibility pin for mlx-swift version: ${mlx_version:-unknown}"
+            ;;
+        esac
+        ;;
+    esac
+
+    makefile="$source_root/Makefile"
+    makefile_tmp="$makefile.xcode-package-flags.tmp.$$"
+    awk '
+      BEGIN { inserted = 0 }
+      {
+        line = $0
+        sub(/^[[:space:]]*/, "", line)
+        if (!inserted && index(line, "xcodebuild -project VoiceInk.xcodeproj -scheme VoiceInk -configuration Release") == 1) {
+          print
+          print "\t\t-disableAutomaticPackageResolution \\"
+          print "\t\t-onlyUsePackageVersionsFromResolvedFile \\"
+          inserted = 1
+          next
+        }
+        print
+      }
+      END {
+        if (!inserted) {
+          exit 42
+        }
+      }
+    ' "$makefile" > "$makefile_tmp" || {
+      /bin/rm -f "$makefile_tmp"
+      die "VoiceInk Makefile local xcodebuild command changed; refusing an unpinned package build"
+    }
+    mv "$makefile_tmp" "$makefile"
 
     (cd "$source_root" && make local LOCAL_CODESIGN_IDENTITY=-)
     built_app="$HOME/Downloads/VoiceInk.app"

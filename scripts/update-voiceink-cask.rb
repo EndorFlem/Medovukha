@@ -82,8 +82,8 @@ rescue JSON::ParserError => e
 end
 
 cask = File.read(CASK_PATH)
-current_revision_match = cask.match(/VOICEINK_UPSTREAM_REVISION\s*=\s*"([0-9a-f]{40})"/)
-fail_with("cask has no VOICEINK_UPSTREAM_REVISION") if current_revision_match.nil?
+current_revision_match = cask.match(/voiceink_upstream_revision\s*=\s*"([0-9a-f]{40})"/)
+fail_with("cask has no voiceink_upstream_revision") if current_revision_match.nil?
 
 latest_revision = current_main_revision
 if current_revision_match[1] == latest_revision
@@ -100,7 +100,7 @@ archive_sha256 = Digest::SHA256.hexdigest(http_get(
 ))
 
 updated = cask.dup
-updated.sub!(/(VOICEINK_UPSTREAM_REVISION\s*=\s*")[0-9a-f]{40}(")/) do
+updated.sub!(/(voiceink_upstream_revision\s*=\s*")[0-9a-f]{40}(")/) do
   "#{Regexp.last_match(1)}#{latest_revision}#{Regexp.last_match(2)}"
 end
 updated.sub!(/(^[ \t]*version[ \t]+")[^"]+(")/) do
