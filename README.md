@@ -108,8 +108,9 @@ Medovukha/
   matches.
 
 The current upstream project requires Xcode with Command Line Tools, CMake,
-macOS 15 or later, and Apple Silicon. Homebrew provides the Git and CMake
-build dependencies, but it cannot provide Xcode or Apple's signing tools.
+macOS 15 or later, Apple Silicon, and the Git command supplied by the Command
+Line Tools. Homebrew provides CMake, but it cannot provide Xcode, Git's Apple
+developer tools, or Apple's signing tools.
 
 The Whisper resource is pinned separately from the VoiceInk commit. If a
 future VoiceInk commit needs a newer Whisper API, update that resource and

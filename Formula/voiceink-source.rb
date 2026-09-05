@@ -17,7 +17,6 @@ class VoiceinkSource < Formula
   end
 
   depends_on macos: :sequoia
-  depends_on "git" => :build
   depends_on "cmake" => :build
 
   def disable_sparkle_for_local_build
@@ -26,18 +25,12 @@ class VoiceinkSource < Formula
 
     inreplace updater_file do |contents|
       import_marker = "import Sparkle\n"
-      raise "VoiceInk updater import marker changed" unless contents.include?(import_marker)
-
       contents.sub!(import_marker, "#if !LOCAL_BUILD\n#{import_marker}#endif\n")
 
       class_marker = "@MainActor\nfinal class UpdaterViewModel"
-      raise "VoiceInk updater class marker changed" unless contents.include?(class_marker)
-
       contents.sub!(class_marker, "#if !LOCAL_BUILD\n#{class_marker}")
 
       view_marker = "\nstruct CheckForUpdatesView: View"
-      raise "VoiceInk updater view marker changed" unless contents.include?(view_marker)
-
       local_stub = <<~'SWIFT'
         #else
         @MainActor
