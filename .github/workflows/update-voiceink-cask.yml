@@ -1,4 +1,4 @@
-name: Update VoiceInk source cask
+name: Update source casks
 
 on:
   schedule:
@@ -20,20 +20,22 @@ jobs:
       - name: Check out tap
         uses: actions/checkout@v5
 
-      - name: Update VoiceInk cask
+      - name: Update source casks
         env:
           GH_TOKEN: ${{ github.token }}
-        run: ruby scripts/update-voiceink-cask.rb
+        run: |
+          ruby scripts/update-voiceink-cask.rb
+          ruby scripts/update-odysseus-cask.rb
 
       - name: Commit and push changes
         run: |
-          if git diff --quiet -- Casks/voiceink-source.rb; then
-            echo "VoiceInk cask is already current."
+          if git diff --quiet -- Casks/voiceink-source.rb Casks/odysseus-source.rb; then
+            echo "Source casks are already current."
             exit 0
           fi
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add Casks/voiceink-source.rb
-          git commit -m "voiceink: update source cask"
+          git add Casks/voiceink-source.rb Casks/odysseus-source.rb
+          git commit -m "casks: update source builds"
           git push

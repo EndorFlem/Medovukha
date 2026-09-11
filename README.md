@@ -1,8 +1,7 @@
 # Medovukha
 
 Personal Homebrew tap for packages built or maintained by EndorFlem.
-VoiceInk is the first package; other formulae and casks can be added to this
-same repository later.
+VoiceInk and Odysseus are source-built casks in this repository.
 
 ## VoiceInk source build
 
@@ -37,6 +36,7 @@ explicit SSH remote:
 ~~~sh
 brew tap EndorFlem/medovukha git@github.com:EndorFlem/Medovukha.git
 brew install EndorFlem/medovukha/voiceink-source
+brew install EndorFlem/medovukha/odysseus-source
 ~~~
 
 The local checkout used to maintain the tap is:
@@ -85,6 +85,32 @@ pinned VoiceInk build. This avoids changing Xcode's macro-validation policy
 globally; the trade-off is that the source and all SwiftPM revisions in the
 build must be trusted.
 
+## Odysseus source build
+
+Odysseus is a self-hosted AI workspace. This tap uses its stable `main` branch
+and builds a small macOS launcher around the upstream Python application. The
+launcher starts the local server and opens its web UI at
+`http://127.0.0.1:7860`.
+
+The installer:
+
+- downloads one exact Odysseus commit;
+- creates an isolated Python 3.13 environment;
+- installs the upstream `requirements.txt` into that environment;
+- creates `~/Applications/Odysseus-local.app`;
+- keeps source, the virtual environment, settings, logs, and data under
+  `~/Library/Application Support/Medovukha/Odysseus`;
+- preserves the data directory when the source cask is upgraded.
+
+Only `python@3.13` is installed automatically by Homebrew. `tmux`,
+`llama.cpp`, and `apfel` are optional upstream Cookbook integrations and are
+not installed by this tap. Add them separately if local model serving needs
+them:
+
+~~~sh
+brew install tmux llama.cpp apfel
+~~~
+
 ## Updates
 
 Once installed from the tap, the normal update command is:
@@ -94,10 +120,11 @@ brew upgrade
 ~~~
 
 The scheduled GitHub Action runs once a week on Monday at 03:17 UTC. It reads
-the latest commit on Beingpax/VoiceInk main, downloads that commit archive,
-calculates its SHA256, and updates the cask's revision, version, and archive
-checksum. A changed version is then visible to ordinary brew upgrade, which
-runs the installer again and rebuilds the app locally.
+the latest commits on Beingpax/VoiceInk `main` and odysseus-dev/odysseus
+`main`, downloads the corresponding archives, calculates their SHA256 values,
+and updates both casks. A changed version is then visible to ordinary
+`brew upgrade`, which runs the relevant installer again and rebuilds the local
+package.
 
 The version format is:
 
@@ -119,9 +146,10 @@ brew upgrade
 ~~~text
 Medovukha/
 ├── Casks/voiceink-source.rb
+├── Casks/odysseus-source.rb
 ├── scripts/update-voiceink-cask.rb
+├── scripts/update-odysseus-cask.rb
 ├── .github/workflows/update-voiceink-cask.yml
-├── .github/workflows/test-voiceink-source.yml
 ├── .gitignore
 └── README.md
 ~~~
@@ -129,10 +157,3 @@ Medovukha/
 update-voiceink-cask.yml needs repository Contents: Read and write permission
 for the workflow token. If branch protection disallows direct workflow pushes,
 change the final step to create a pull request instead.
-
-## CI build test
-
-The macOS workflow checks Ruby syntax and performs the actual cask install on
-macos-15, then verifies the bundle identifier and code signature. It never
-launches VoiceInk. The build is intentionally expensive because it compiles
-Whisper and VoiceInk from source.
