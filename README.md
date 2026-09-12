@@ -132,9 +132,11 @@ docker compose --project-directory "$odysseus_root/source" \
 ~~~
 
 Port `7000` is the default. macOS AirPlay Receiver commonly occupies that
-port and answers with `403` as `AirTunes`; that response is not Odysseus. Turn
-off AirPlay Receiver if `7000` is required, or change `APP_PORT` in the saved
-`.env` file and use the corresponding URL.
+port and answers with `403` as `AirTunes`; that response is not Odysseus. If
+the configured port is busy, the launcher automatically selects the next free
+port, saves it in `.env`, and sends a notification with the actual URL. To
+claim `7000` specifically, turn off AirPlay Receiver and set `APP_PORT=7000`
+in the saved `.env` file.
 
 ## Updates
 

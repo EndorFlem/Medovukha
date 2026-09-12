@@ -1,7 +1,7 @@
 cask "odysseus-source" do
   # The packaging suffix makes the Docker-only migration visible to Homebrew
   # even when the upstream commit has not changed yet.
-  version "2026.09.12.000000-934d23c0-docker"
+  version "2026.09.12.000001-934d23c0-docker"
   sha256 "65b74c853a54b0ef3019ac8bc5390bb1f3c55d15906200991ee679b568e5185e"
 
   # Managed by scripts/update-odysseus-cask.rb.
@@ -226,24 +226,58 @@ cask "odysseus-source" do
     fi
     docker info >/dev/null 2>&1 || show_error "Docker Desktop is not running. Start Docker Desktop and launch Odysseus-local again."
 
+    mkdir -p "$(dirname "$LOG_FILE")"
     port="$(/usr/bin/sed -n 's/^[[:space:]]*APP_PORT[[:space:]]*=[[:space:]]*\"*\([0-9][0-9]*\)\"*.*/\1/p' "$CONFIG_FILE" | /usr/bin/tail -n 1)"
     port="${port:-7000}"
     running_container="$(docker compose \
       --project-directory "$SOURCE_ROOT" \
       --env-file "$CONFIG_FILE" \
       ps --status running -q odysseus 2>/dev/null || true)"
+    effective_port="$port"
     if [ -z "$running_container" ] && /usr/sbin/lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1; then
-      owner="$(/usr/sbin/lsof -nP -iTCP:"$port" -sTCP:LISTEN 2>/dev/null | /usr/bin/awk 'NR == 2 { print $1 }')"
-      show_error "Port $port is already occupied by ${owner:-another process}. macOS AirPlay Receiver commonly occupies port 7000 and returns 403. Turn AirPlay Receiver off or change APP_PORT in $CONFIG_FILE."
+      fallback_port=$((port + 1))
+      while /usr/sbin/lsof -nP -iTCP:"$fallback_port" -sTCP:LISTEN >/dev/null 2>&1; do
+        fallback_port=$((fallback_port + 1))
+      done
+
+      env_tmp="$CONFIG_FILE.tmp.$$"
+      /usr/bin/awk -v old_port="$port" -v new_port="$fallback_port" '
+        $0 ~ "^[[:space:]]*APP_PORT[[:space:]]*=" {
+          print "APP_PORT=" new_port
+          port_seen = 1
+          next
+        }
+        $0 ~ "^[[:space:]]*ALLOWED_ORIGINS[[:space:]]*=" {
+          value = $0
+          sub("^[[:space:]]*ALLOWED_ORIGINS[[:space:]]*=", "", value)
+          gsub("http://localhost:" old_port, "http://localhost:" new_port, value)
+          gsub("http://127\\.0\\.0\\.1:" old_port, "http://127.0.0.1:" new_port, value)
+          if (index(value, "http://localhost:" new_port) == 0) value = value ",http://localhost:" new_port
+          if (index(value, "http://127.0.0.1:" new_port) == 0) value = value ",http://127.0.0.1:" new_port
+          print "ALLOWED_ORIGINS=" value
+          origins_seen = 1
+          next
+        }
+        { print }
+        END {
+          if (!port_seen) print "APP_PORT=" new_port
+          if (!origins_seen) print "ALLOWED_ORIGINS=http://localhost:" new_port ",http://127.0.0.1:" new_port
+        }
+      ' "$CONFIG_FILE" > "$env_tmp" && /bin/mv "$env_tmp" "$CONFIG_FILE"
+
+      effective_port="$fallback_port"
     fi
 
-    mkdir -p "$(dirname "$LOG_FILE")"
     if ! docker compose \
       --project-directory "$SOURCE_ROOT" \
       --env-file "$CONFIG_FILE" \
       up -d --build > "$LOG_FILE" 2>&1; then
       /usr/bin/osascript -e "display dialog \"Docker Compose could not start Odysseus.\n\nLog: $LOG_FILE\" with title \"Odysseus Docker\" buttons {\"OK\"} default button 1 with icon stop" >/dev/null 2>&1 || true
       exit 1
+    fi
+    if [ "$effective_port" != "$port" ]; then
+      printf 'Port %s is occupied; using fallback port %s\n' "$port" "$effective_port" >> "$LOG_FILE"
+      /usr/bin/osascript -e "display notification \"Port $port is busy; Odysseus is running at http://127.0.0.1:$effective_port\" with title \"Odysseus Docker\"" >/dev/null 2>&1 || true
     fi
     exit 0
     LAUNCHER
