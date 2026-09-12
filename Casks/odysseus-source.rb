@@ -1,7 +1,7 @@
 cask "odysseus-source" do
   # The packaging suffix makes the Docker-only migration visible to Homebrew
   # even when the upstream commit has not changed yet.
-  version "2026.09.12.000001-934d23c0-docker"
+  version "2026.09.12.000002-934d23c0-docker"
   sha256 "65b74c853a54b0ef3019ac8bc5390bb1f3c55d15906200991ee679b568e5185e"
 
   # Managed by scripts/update-odysseus-cask.rb.
@@ -204,6 +204,7 @@ cask "odysseus-source" do
     SOURCE_ROOT="$STATE_ROOT/source"
     CONFIG_FILE="$STATE_ROOT/.env"
     LOG_FILE="$STATE_ROOT/logs/docker-compose-launch.log"
+    LOCK_DIR="$STATE_ROOT/launch.lock"
 
     show_error() {
       /usr/bin/osascript -e "display dialog \"$1\" with title \"Odysseus Docker\" buttons {\"OK\"} default button 1 with icon stop" >/dev/null 2>&1 || true
@@ -212,6 +213,27 @@ cask "odysseus-source" do
 
     [ -f "$CONFIG_FILE" ] || show_error "Odysseus settings are missing: $CONFIG_FILE"
     [ -d "$SOURCE_ROOT" ] || show_error "Odysseus source directory is missing: $SOURCE_ROOT"
+
+    if [ -e "$LOCK_DIR" ]; then
+      lock_pid="$(/usr/bin/sed -n '1p' "$LOCK_DIR/pid" 2>/dev/null || true)"
+      case "$lock_pid" in
+        ''|*[!0-9]*) lock_pid='' ;;
+      esac
+      if [ -n "$lock_pid" ] && kill -0 "$lock_pid" 2>/dev/null; then
+        exit 0
+      fi
+      /bin/rm -rf "$LOCK_DIR"
+    fi
+    if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+      exit 0
+    fi
+    printf '%s\n' "$$" > "$LOCK_DIR/pid"
+    release_lock() {
+      /bin/rm -f "$LOCK_DIR/pid"
+      /bin/rmdir "$LOCK_DIR" 2>/dev/null || true
+    }
+    trap release_lock EXIT INT TERM
+
     export PATH="/Applications/Docker.app/Contents/Resources/bin:$PATH"
     command -v docker >/dev/null 2>&1 || show_error "Docker CLI is not installed. Install Docker Desktop first."
     docker compose version >/dev/null 2>&1 || show_error "Docker Compose is not available in the Docker CLI."
