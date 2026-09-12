@@ -1,7 +1,7 @@
 cask "odysseus-source" do
   # The packaging suffix makes the Docker-only migration visible to Homebrew
   # even when the upstream commit has not changed yet.
-  version "2026.09.12.000002-934d23c0-docker"
+  version "2026.09.12.000003-934d23c0-docker"
   sha256 "65b74c853a54b0ef3019ac8bc5390bb1f3c55d15906200991ee679b568e5185e"
 
   # Managed by scripts/update-odysseus-cask.rb.
@@ -162,6 +162,58 @@ cask "odysseus-source" do
       /bin/rm -rf "$incoming_root/.env"
     fi
     ln -s "$config_file" "$incoming_root/.env"
+
+    # The upstream Dockerfile always builds patched Real-ESRGAN wheels even
+    # though that path is optional. On Apple Silicon this can spend a very
+    # long time resolving backend dependencies before the core app image can
+    # finish. Keep the core Docker image usable and leave Real-ESRGAN as an
+    # explicit optional Cookbook path instead.
+    dockerfile="$incoming_root/Dockerfile"
+    dockerfile_tmp="$dockerfile.medovukha.tmp.$$"
+    /usr/bin/awk '
+      BEGIN {
+        in_builder = 0
+        skip_wheel_install = 0
+        saw_builder_start = 0
+        saw_builder_end = 0
+        saw_wheel_copy = 0
+        saw_wheel_install = 0
+      }
+      $0 == "FROM python:3.14-slim AS realesrgan-wheels" {
+        in_builder = 1
+        saw_builder_start = 1
+        next
+      }
+      in_builder && $0 == "FROM python:3.14-slim" {
+        in_builder = 0
+        saw_builder_end = 1
+        print
+        next
+      }
+      in_builder { next }
+      index($0, "COPY --from=realesrgan-wheels /wheels/") == 1 {
+        saw_wheel_copy = 1
+        skip_wheel_install = 1
+        next
+      }
+      skip_wheel_install {
+        if (index($0, "rm -rf /tmp/odysseus-wheels") > 0) {
+          skip_wheel_install = 0
+          saw_wheel_install = 1
+        }
+        next
+      }
+      { print }
+      END {
+        if (!saw_builder_start || !saw_builder_end || !saw_wheel_copy || !saw_wheel_install) exit 42
+      }
+    ' "$dockerfile" > "$dockerfile_tmp" || {
+      /bin/rm -f "$dockerfile_tmp"
+      die "Unexpected upstream Dockerfile layout; cannot disable optional Real-ESRGAN builder safely"
+    }
+    /bin/mv "$dockerfile_tmp" "$dockerfile"
+    /usr/bin/grep -Eq '^(FROM|COPY).*realesrgan-wheels' "$dockerfile" && \
+      die "Real-ESRGAN builder reference remained after the local Dockerfile patch"
 
     app_build="$state_root/.Odysseus-local.app.$$"
     mkdir -p "$app_build/Contents/MacOS" "$app_build/Contents/Resources"

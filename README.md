@@ -100,6 +100,8 @@ The installer:
 - keeps source, Compose settings, logs, and data under
   `~/Library/Application Support/Medovukha/Odysseus`;
 - preserves the data directory when the source cask is upgraded.
+- skips the upstream optional Real-ESRGAN wheel prebuild, which otherwise can
+  block the first Apple Silicon image build for a very long time.
 
 Docker Desktop must be installed; the launcher starts it in the background if
 it is not running. This cask deliberately does not install Docker or any
