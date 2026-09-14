@@ -1,9 +1,9 @@
 cask "voiceink-source" do
-  version "2026.09.02.184240-8f089cb4"
-  sha256 "18a1322c5899fdb43566d839689ea25d31fb5ca013a1306e440b3c0781ea5e68"
+  version "2026.09.12.042226-832d2126"
+  sha256 "13af786798cc1d19862c62f394e6a6312c7c9c57899c704a281549c5b56ce2d7"
 
   # Managed by scripts/update-voiceink-cask.rb.
-  voiceink_upstream_revision = "8f089cb4bf2c9c2f217b0cc0af909d9052ff6288"
+  voiceink_upstream_revision = "832d2126d9b196dadcc24c4480056045a031b5e9"
   whisper_cpp_revision = "52a939a2a762224e255d366c1182b2af4dd1a032"
   whisper_cpp_sha256 = "6212572f00e887698440dbbf87aef27de6e56dbe73907f6148686ec55d584a19"
 
