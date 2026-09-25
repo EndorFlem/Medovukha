@@ -6,6 +6,7 @@ class TelegramMcpSource < Formula
   # telegram_mcp_upstream_revision = "45cce7e3dbf50655645f48d5f78d8a84aec6aa8f"
 
   url "https://github.com/chigwell/telegram-mcp/archive/refs/tags/#{telegram_mcp_upstream_tag}.tar.gz"
+  version "3.2.47.1"
   sha256 "d922424cffea475e8f7d1b46eeab6351e7251e94188bf158c1c8a439261b79b5"
   license "Apache-2.0"
 
@@ -19,6 +20,7 @@ class TelegramMcpSource < Formula
 
   def install
     libexec.install Dir["*"]
+    runtime_revision = "1"
 
     runner = <<~SH
       #!/bin/bash
@@ -63,25 +65,19 @@ class TelegramMcpSource < Formula
         trap release_lock EXIT INT TERM
 
         installed_revision="$(/usr/bin/sed -n '1p' "$revision_file" 2>/dev/null || true)"
-        if [ ! -x "$venv_root/bin/$command_name" ] || [ "$installed_revision" != "#{version}" ]; then
-          temporary_venv="$state_root/.venv.tmp.$$"
-          /bin/rm -rf "$temporary_venv"
-          UV_PROJECT_ENVIRONMENT="$temporary_venv" uv sync \
+        command_path="$venv_root/bin/$command_name"
+        command_interpreter="$(/usr/bin/sed -n '1s/^#!//p' "$command_path" 2>/dev/null || true)"
+        if [ ! -x "$command_path" ] || \
+           [ "$installed_revision" != "#{version}-r#{runtime_revision}" ] || \
+           [ "$command_interpreter" != "$venv_root/bin/python" ]; then
+          UV_PROJECT_ENVIRONMENT="$venv_root" uv sync \
             --project "$source_root" \
             --frozen \
             --no-dev \
             --python 3.13 >&2
 
-          previous_venv="$state_root/.venv.previous.$$"
-          if [ -e "$venv_root" ]; then
-            /bin/mv "$venv_root" "$previous_venv"
-          fi
-          /bin/mv "$temporary_venv" "$venv_root"
-          printf '%s\n' "#{version}" > "$revision_file.tmp.$$"
+          printf '%s\n' "#{version}-r#{runtime_revision}" > "$revision_file.tmp.$$"
           /bin/mv "$revision_file.tmp.$$" "$revision_file"
-          if [ -e "$previous_venv" ]; then
-            /bin/rm -rf "$previous_venv"
-          fi
         fi
       }
 

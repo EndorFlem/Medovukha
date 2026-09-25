@@ -91,6 +91,7 @@ fail_with("formula has no telegram_mcp_upstream_revision") if current_revision_m
 release = latest_release
 release_tag = release["tag_name"].to_s
 fail_with("latest release has no v-prefixed semantic version tag") unless release_tag.match?(/\Av\d+\.\d+\.\d+\z/)
+version = release_tag.delete_prefix("v")
 latest_revision = tag_revision(release_tag)
 
 if current_tag_match[1] == release_tag && current_revision_match[1] == latest_revision
@@ -110,6 +111,9 @@ updated.sub!(/(telegram_mcp_upstream_tag\s*=\s*")[^"]+(")/) do
 end
 updated.sub!(/(telegram_mcp_upstream_revision\s*=\s*")[0-9a-f]{40}(")/) do
   "#{Regexp.last_match(1)}#{latest_revision}#{Regexp.last_match(2)}"
+end
+updated.sub!(/(^[ \t]*version[ \t]+\")[^"]+(\")/) do
+  "#{Regexp.last_match(1)}#{version}#{Regexp.last_match(2)}"
 end
 updated.sub!(/(^[ \t]*sha256[ \t]+\")[0-9a-f]{64}(\")/) do
   "#{Regexp.last_match(1)}#{archive_sha256}#{Regexp.last_match(2)}"
