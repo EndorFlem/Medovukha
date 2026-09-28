@@ -4,9 +4,11 @@ cask "monocode-source" do
 
   # Managed by scripts/update-monocode-source-cask.rb.
   monocode_upstream_revision = "6ffc99589be087d16bb6d764afdc3502e5046750"
+  monocode_patch_url = "https://raw.githubusercontent.com/EndorFlem/Medovukha/main/patches/monocode-omp-rpc-v2.patch"
   monocode_patch_sha256 = "c816097d06112bfd065132f82556fa01e48f7aa4b8dd91d6fd15dcc497d6af77"
 
-  url "https://github.com/hardbeat920/monocode/archive/#{monocode_upstream_revision}.tar.gz"
+  # A commit archive keeps the source build reproducible.
+  url "https://codeload.github.com/hardbeat920/monocode/tar.gz/#{monocode_upstream_revision}"
   name "MonoCode source build"
   desc "Desktop GUI for coding agents with OMP RPC v2 model discovery"
   homepage "https://github.com/hardbeat920/monocode"
@@ -15,18 +17,13 @@ cask "monocode-source" do
     skip "Version is managed by the MonoCode source commit updater."
   end
 
-  depends_on macos: :sequoia
+  conflicts_with cask: "monocode"
   depends_on arch: :arm64
   depends_on formula: "node"
   depends_on formula: "rust"
-  conflicts_with cask: "monocode"
+  depends_on macos: :sequoia
 
-  resource "monocode-omp-rpc-v2.patch" do
-    url "https://raw.githubusercontent.com/EndorFlem/Medovukha/main/patches/monocode-omp-rpc-v2.patch"
-    sha256 monocode_patch_sha256
-  end
-
-  generated_script "install-monocode-source.sh", content: <<~'SH'
+  generated_script "install-monocode-source.sh", content: <<~SH
     #!/bin/bash
     set -euo pipefail
 
@@ -37,16 +34,15 @@ cask "monocode-source" do
 
     user_home="${HOME:-}"
     [ -n "$user_home" ] || die "HOME is not set"
-    [ "$#" -ge 2 ] || die "Missing MonoCode source or patch staging path"
+    [ "$#" -ge 1 ] || die "Missing MonoCode source staging path"
     staged_root="$1"
-    patch_path="$2"
     [ -d "$staged_root" ] || die "MonoCode source staging path does not exist: $staged_root"
-    [ -f "$patch_path" ] || die "MonoCode OMP patch does not exist: $patch_path"
 
     state_root="$user_home/Library/Application Support/Medovukha/MonoCode"
     backup_root="$state_root/backups"
     target_app="$user_home/Applications/MonoCode-local.app"
     lock_dir="$state_root/install.lock"
+    patch_path="$state_root/omp-rpc-v2.patch.$$"
     mkdir -p "$state_root" "$backup_root" "$user_home/Applications"
 
     if [ -e "$lock_dir" ]; then
@@ -83,6 +79,7 @@ cask "monocode-source" do
       elif [ -n "$app_backup" ] && [ -e "$app_backup" ]; then
         /bin/rm -rf "$app_backup"
       fi
+      /bin/rm -f "$patch_path"
       /bin/rm -f "$lock_dir/pid"
       /bin/rmdir "$lock_dir" 2>/dev/null || true
       exit "$status"
@@ -90,7 +87,7 @@ cask "monocode-source" do
     trap cleanup EXIT INT TERM
 
     for required_command in \
-      awk cargo cat codesign ditto find git mkdir mv node npm npx patch pgrep rm sed xattr xcodebuild; do
+      awk cargo cat codesign curl ditto find git mkdir mv node npm npx patch pgrep rm sed shasum xattr xcodebuild; do
       command -v "$required_command" >/dev/null 2>&1 || die "Required command not found: $required_command"
     done
 
@@ -110,6 +107,13 @@ cask "monocode-source" do
     [ -n "$source_root" ] || die "MonoCode source directory was not found"
     [ -f "$source_root/package.json" ] || die "MonoCode package.json was not found"
     [ -f "$source_root/package-lock.json" ] || die "MonoCode package-lock.json was not found"
+
+    curl --fail --location --silent --show-error \
+      --output "$patch_path" \
+      "#{monocode_patch_url}"
+    actual_patch_sha256="$(shasum -a 256 "$patch_path" | awk '{print $1}')"
+    [ "$actual_patch_sha256" = "#{monocode_patch_sha256}" ] || \
+      die "Downloaded MonoCode OMP patch has an unexpected SHA256"
 
     patch -p1 --batch --forward -d "$source_root" < "$patch_path" || \
       die "The pinned OMP RPC patch does not apply to this MonoCode source tree"
@@ -155,12 +159,12 @@ cask "monocode-source" do
 
     printf 'Installed MonoCode source build at %s\n' "$target_app"
   SH
-
   installer script: {
     executable: "install-monocode-source.sh",
-    args:       [staged_path, resource("monocode-omp-rpc-v2.patch").staged_path],
+    args:       [staged_path],
   }
 
   uninstall trash: "#{Dir.home}/Applications/MonoCode-local.app"
+
   zap trash: "#{Dir.home}/Library/Application Support/Medovukha/MonoCode"
 end
