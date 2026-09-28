@@ -99,13 +99,15 @@ patch = File.binread(PATCH_PATH)
 check_patch_applies(archive, patch)
 
 archive_sha256 = Digest::SHA256.hexdigest(archive)
+patch_sha256 = Digest::SHA256.hexdigest(patch)
 cask = File.read(CASK_PATH)
 current_revision = cask[/^\s*monocode_upstream_revision\s*=\s*"([0-9a-f]{40})"/, 1]
 current_version = cask[/^\s*version\s+"([^"]+)"/, 1]
 current_sha256 = cask[/^\s*sha256\s+"([0-9a-f]{64})"/, 1]
-fail_with("cask has no version, source revision, or sha256") if [current_version, current_revision, current_sha256].any?(&:nil?)
+current_patch_sha256 = cask[/^\s*monocode_patch_sha256\s*=\s*"([0-9a-f]{64})"/, 1]
+fail_with("cask has no version, source revision, archive sha256, or patch sha256") if [current_version, current_revision, current_sha256, current_patch_sha256].any?(&:nil?)
 
-if current_revision == revision && current_version == version && current_sha256 == archive_sha256
+if current_revision == revision && current_version == version && current_sha256 == archive_sha256 && current_patch_sha256 == patch_sha256
   puts "MonoCode source cask is already at #{revision[0, 7]}."
   exit 0
 end
@@ -119,6 +121,9 @@ updated.sub!(/(^\s*sha256\s+")[0-9a-f]{64}(")/) do
 end
 updated.sub!(/(^\s*monocode_upstream_revision\s*=\s*")[0-9a-f]{40}(")/) do
   "#{Regexp.last_match(1)}#{revision}#{Regexp.last_match(2)}"
+end
+updated.sub!(/(^\s*monocode_patch_sha256\s*=\s*")[0-9a-f]{64}(")/) do
+  "#{Regexp.last_match(1)}#{patch_sha256}#{Regexp.last_match(2)}"
 end
 fail_with("cask update markers were incomplete") if updated == cask
 
@@ -134,3 +139,4 @@ puts "Updated MonoCode source cask."
 puts "  revision: #{revision}"
 puts "  version:  #{version}"
 puts "  sha256:   #{archive_sha256}"
+puts "  patch:    #{patch_sha256}"
