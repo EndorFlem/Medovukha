@@ -1,7 +1,8 @@
 # Medovukha
 
 Personal Homebrew tap for packages built or maintained by EndorFlem.
-VoiceInk and Odysseus are source-built casks in this repository.
+VoiceInk, Odysseus, and the patched MonoCode build are source-built casks in
+this repository.
 
 ## VoiceInk source build
 
@@ -145,6 +146,22 @@ port, saves it in `.env`, and sends a notification with the actual URL. To
 claim `7000` specifically, turn off AirPlay Receiver and set `APP_PORT=7000`
 in the saved `.env` file.
 
+## MonoCode source build
+
+The regular `monocode` cask installs the upstream Apple Silicon DMG. The
+`monocode-source` cask builds MonoCode locally and applies the OMP RPC v2 patch,
+which fixes model-catalog discovery for large OMP installations. It requires
+full Xcode, Node.js, and Rust, and installs:
+
+~~~sh
+brew install EndorFlem/medovukha/monocode-source
+open "$HOME/Applications/MonoCode-local.app"
+~~~
+
+The patched app uses the existing OMP installation and credentials. It does
+not install or configure model providers itself. Its source commit is checked
+weekly; the updater only advances it when the local RPC patch still applies.
+
 ## Updates
 
 Once installed from the tap, the normal update command is:
@@ -181,9 +198,13 @@ brew upgrade
 Medovukha/
 ├── Casks/voiceink-source.rb
 ├── Casks/odysseus-source.rb
+├── Casks/monocode-source.rb
+├── patches/monocode-omp-rpc-v2.patch
 ├── scripts/update-voiceink-cask.rb
 ├── scripts/update-odysseus-cask.rb
+├── scripts/update-monocode-source-cask.rb
 ├── .github/workflows/update-voiceink-cask.yml
+├── .github/workflows/update-monocode-source-cask.yml
 ├── .gitignore
 └── README.md
 ~~~

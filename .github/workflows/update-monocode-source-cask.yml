@@ -1,0 +1,39 @@
+name: Update MonoCode source cask
+
+on:
+  schedule:
+    - cron: "27 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-monocode-source-cask
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out tap
+        uses: actions/checkout@v5
+
+      - name: Update MonoCode source cask
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ruby scripts/update-monocode-source-cask.rb
+
+      - name: Commit and push changes
+        run: |
+          if git diff --quiet -- Casks/monocode-source.rb; then
+            echo "MonoCode source cask is already current."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Casks/monocode-source.rb
+          git commit -m "monocode: update patched source cask"
+          git push

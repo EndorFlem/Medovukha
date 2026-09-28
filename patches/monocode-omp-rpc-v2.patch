@@ -1,0 +1,418 @@
+diff --git a/src/integrations/harness/providers/pi/piCatalog.ts b/src/integrations/harness/providers/pi/piCatalog.ts
+index bb3f2e0..e3873a5 100644
+--- a/src/integrations/harness/providers/pi/piCatalog.ts
++++ b/src/integrations/harness/providers/pi/piCatalog.ts
+@@ -58,6 +58,10 @@ async function discoverModels(flavor: PiFlavor) {
+       undefined,
+       flavor.id,
+     );
++    if (flavor.id === "omp") {
++      await rpc.waitForReady(DISCOVERY_TIMEOUT_MS);
++      await rpc.negotiateProtocol(2, DISCOVERY_TIMEOUT_MS).catch(() => false);
++    }
+     const response = await Promise.race([
+       rpc.request({ type: "get_available_models" }, DISCOVERY_TIMEOUT_MS),
+       new Promise<never>((_, reject) => {
+diff --git a/src/integrations/harness/providers/pi/piClient.test.ts b/src/integrations/harness/providers/pi/piClient.test.ts
+index 3075f3f..ba61084 100644
+--- a/src/integrations/harness/providers/pi/piClient.test.ts
++++ b/src/integrations/harness/providers/pi/piClient.test.ts
+@@ -46,4 +46,74 @@ describe("PiRpc.request", () => {
+     write.resolve();
+     rpc.close();
+   });
++
++  it("negotiates RPC v2 and reassembles chunked responses", async () => {
++    mocks.writeChild.mockResolvedValue(undefined);
++    const rpc = new PiRpc("probe", vi.fn());
++    rpc.pushLine(
++      JSON.stringify({
++        type: "ready",
++        protocolVersion: 1,
++        supportedProtocolVersions: [1, 2],
++        maxReassembledFrameBytes: 1024,
++      }),
++    );
++
++    const negotiation = rpc.negotiateProtocol(2);
++    await Promise.resolve();
++    const negotiationRequest = JSON.parse(
++      mocks.writeChild.mock.calls[0][1],
++    ) as { id: string };
++    expect(negotiationRequest).toMatchObject({
++      type: "negotiate_protocol",
++      protocolVersion: 2,
++    });
++    rpc.pushLine(
++      JSON.stringify({
++        type: "response",
++        id: negotiationRequest.id,
++        command: "negotiate_protocol",
++        success: true,
++        data: { protocolVersion: 2 },
++      }),
++    );
++    await expect(negotiation).resolves.toBe(true);
++
++    const request = rpc.request({ type: "get_available_models" });
++    const modelRequest = JSON.parse(mocks.writeChild.mock.calls[1][1]) as {
++      id: string;
++    };
++    const payload = new TextEncoder().encode(
++      JSON.stringify({
++        type: "response",
++        id: modelRequest.id,
++        command: "get_available_models",
++        success: true,
++        data: { models: [{ provider: "test", id: "model" }] },
++      }),
++    );
++    const split = Math.ceil(payload.length / 2);
++    const chunks = [payload.slice(0, split), payload.slice(split)];
++    chunks.forEach((bytes, index) => {
++      let binary = "";
++      bytes.forEach((byte) => {
++        binary += String.fromCharCode(byte);
++      });
++      rpc.pushLine(
++        JSON.stringify({
++          type: "rpc_chunk",
++          chunkId: "rpc-1",
++          index,
++          count: chunks.length,
++          byteLength: payload.length,
++          data: btoa(binary),
++        }),
++      );
++    });
++
++    await expect(request).resolves.toMatchObject({
++      data: { models: [{ provider: "test", id: "model" }] },
++    });
++    rpc.close();
++  });
+ });
+diff --git a/src/integrations/harness/providers/pi/piClient.ts b/src/integrations/harness/providers/pi/piClient.ts
+index 6218c1c..210cf8e 100644
+--- a/src/integrations/harness/providers/pi/piClient.ts
++++ b/src/integrations/harness/providers/pi/piClient.ts
+@@ -1,11 +1,33 @@
+ import { writeChild } from "../../core/child";
+-import { parseJsonLine, parseRpcResponse, stringField } from "./piProtocol";
++import {
++  asRecord,
++  decodeRpcChunkData,
++  parseJsonLine,
++  parseRpcChunk,
++  parseRpcResponse,
++  stringField,
++} from "./piProtocol";
+
+ type Pending = {
+   resolve: (value: Record<string, unknown>) => void;
+   reject: (error: Error) => void;
+ };
+
++type ChunkAssembly = {
++  count: number;
++  byteLength: number;
++  parts: Array<Uint8Array | undefined>;
++  totalBytes: number;
++};
++
++type ReadyWaiter = {
++  resolve: (frame: Record<string, unknown>) => void;
++  reject: (error: Error) => void;
++  timer: ReturnType<typeof setTimeout>;
++};
++
++const DEFAULT_MAX_REASSEMBLED_FRAME_BYTES = 64 * 1024 * 1024;
++
+ /**
+  * JSONL request/response multiplexer for `pi --mode rpc` and the identical
+  * `omp --mode rpc`. Agent events and extension UI frames go to `onFrame`.
+@@ -13,6 +35,10 @@ type Pending = {
+ export class PiRpc {
+   private nextId = 1;
+   private readonly pending = new Map<string, Pending>();
++  private readonly chunks = new Map<string, ChunkAssembly>();
++  private readonly readyWaiters = new Set<ReadyWaiter>();
++  private readyFrame: Record<string, unknown> | null = null;
++  private maxReassembledFrameBytes = DEFAULT_MAX_REASSEMBLED_FRAME_BYTES;
+   private closed = false;
+
+   constructor(
+@@ -24,6 +50,33 @@ export class PiRpc {
+   pushLine(line: string) {
+     const rec = parseJsonLine(line);
+     if (!rec) return;
++    this.pushRecord(rec);
++  }
++
++  private pushRecord(rec: Record<string, unknown>) {
++    const chunk = parseRpcChunk(rec);
++    if (stringField(rec, "type") === "rpc_chunk" && !chunk) {
++      this.close(new Error(`${this.label} RPC chunk metadata is invalid`));
++      return;
++    }
++    if (chunk) {
++      this.pushChunk(chunk);
++      return;
++    }
++
++    if (stringField(rec, "type") === "ready") {
++      this.readyFrame = rec;
++      const max = rec.maxReassembledFrameBytes;
++      if (typeof max === "number" && Number.isInteger(max) && max > 0) {
++        this.maxReassembledFrameBytes = max;
++      }
++      for (const waiter of this.readyWaiters) {
++        clearTimeout(waiter.timer);
++        waiter.resolve(rec);
++      }
++      this.readyWaiters.clear();
++    }
++
+     const response = parseRpcResponse(rec);
+     if (response?.id && this.pending.has(response.id)) {
+       const pending = this.pending.get(response.id);
+@@ -31,7 +84,9 @@ export class PiRpc {
+       if (!pending) return;
+       if (!response.success) {
+         pending.reject(
+-          new Error(response.error || `${this.label} ${response.command} failed`),
++          new Error(
++            response.error || `${this.label} ${response.command} failed`,
++          ),
+         );
+         return;
+       }
+@@ -41,13 +96,116 @@ export class PiRpc {
+     this.onFrame(rec);
+   }
+
++  private pushChunk(chunk: {
++    chunkId: string;
++    index: number;
++    count: number;
++    byteLength: number;
++    data: string;
++  }) {
++    if (chunk.byteLength > this.maxReassembledFrameBytes) {
++      this.close(
++        new Error(
++          `${this.label} RPC chunked frame exceeds the transport limit`,
++        ),
++      );
++      return;
++    }
++
++    let assembly = this.chunks.get(chunk.chunkId);
++    if (!assembly) {
++      assembly = {
++        count: chunk.count,
++        byteLength: chunk.byteLength,
++        parts: Array.from({ length: chunk.count }),
++        totalBytes: 0,
++      };
++      this.chunks.set(chunk.chunkId, assembly);
++    } else if (
++      assembly.count !== chunk.count ||
++      assembly.byteLength !== chunk.byteLength
++    ) {
++      this.close(new Error(`${this.label} RPC chunk metadata changed`));
++      return;
++    }
++
++    if (assembly.parts[chunk.index]) {
++      this.close(new Error(`${this.label} RPC chunk repeated an index`));
++      return;
++    }
++    const bytes = decodeRpcChunkData(chunk.data);
++    if (!bytes) {
++      this.close(new Error(`${this.label} RPC chunk is not valid base64`));
++      return;
++    }
++    assembly.parts[chunk.index] = bytes;
++    assembly.totalBytes += bytes.byteLength;
++    if (assembly.totalBytes > assembly.byteLength) {
++      this.close(new Error(`${this.label} RPC chunk payload is too large`));
++      return;
++    }
++    if (assembly.parts.some((part) => part == null)) return;
++    if (assembly.totalBytes !== assembly.byteLength) {
++      this.close(new Error(`${this.label} RPC chunk payload is incomplete`));
++      return;
++    }
++
++    const payload = new Uint8Array(assembly.byteLength);
++    let offset = 0;
++    for (const part of assembly.parts) {
++      if (!part) return;
++      payload.set(part, offset);
++      offset += part.byteLength;
++    }
++    this.chunks.delete(chunk.chunkId);
++    const frame = parseJsonLine(new TextDecoder().decode(payload));
++    if (!frame) {
++      this.close(new Error(`${this.label} RPC chunk payload is not JSON`));
++      return;
++    }
++    this.pushRecord(frame);
++  }
++
++  async waitForReady(timeoutMs = 15_000): Promise<Record<string, unknown>> {
++    if (this.readyFrame) return this.readyFrame;
++    if (this.closed) throw new Error(`${this.label} process is not running`);
++    return new Promise((resolve, reject) => {
++      const timer = setTimeout(() => {
++        this.readyWaiters.delete(waiter);
++        reject(new Error(`${this.label} ready frame timed out`));
++      }, timeoutMs);
++      const waiter = { resolve, reject, timer };
++      this.readyWaiters.add(waiter);
++    });
++  }
++
++  async negotiateProtocol(
++    protocolVersion: number,
++    timeoutMs = 15_000,
++  ): Promise<boolean> {
++    const ready = await this.waitForReady(timeoutMs);
++    const supported = ready.supportedProtocolVersions;
++    if (
++      Array.isArray(supported) &&
++      !supported.some((value) => value === protocolVersion)
++    ) {
++      return false;
++    }
++    const response = await this.request(
++      { type: "negotiate_protocol", protocolVersion },
++      timeoutMs,
++    );
++    return asRecord(response.data)?.protocolVersion === protocolVersion;
++  }
++
+   async request(
+     command: Record<string, unknown>,
+     timeoutMs = 15_000,
+   ): Promise<Record<string, unknown>> {
+     if (this.closed) throw new Error(`${this.label} process is not running`);
+     const id = stringField(command, "id") ?? `mc_${this.nextId++}`;
+-    if (this.pending.has(id)) throw new Error(`Duplicate RPC request id: ${id}`);
++    if (this.pending.has(id))
++      throw new Error(`Duplicate RPC request id: ${id}`);
+     const payload = { ...command, id };
+     const pending = new Promise<Record<string, unknown>>((resolve, reject) => {
+       const timer = setTimeout(() => {
+@@ -67,8 +225,7 @@ export class PiRpc {
+       });
+     });
+     void writeChild(this.sessionId, JSON.stringify(payload)).catch((error) => {
+-      const message =
+-        error instanceof Error ? error : new Error(String(error));
++      const message = error instanceof Error ? error : new Error(String(error));
+       const request = this.pending.get(id);
+       this.pending.delete(id);
+       request?.reject(message);
+@@ -79,7 +236,13 @@ export class PiRpc {
+   close(error?: Error) {
+     if (this.closed) return;
+     this.closed = true;
++    this.chunks.clear();
+     const err = error ?? new Error(`${this.label} process exited`);
++    for (const waiter of this.readyWaiters) {
++      clearTimeout(waiter.timer);
++      waiter.reject(err);
++    }
++    this.readyWaiters.clear();
+     for (const pending of this.pending.values()) pending.reject(err);
+     this.pending.clear();
+   }
+diff --git a/src/integrations/harness/providers/pi/piProtocol.ts b/src/integrations/harness/providers/pi/piProtocol.ts
+index 14799fe..31dd3d0 100644
+--- a/src/integrations/harness/providers/pi/piProtocol.ts
++++ b/src/integrations/harness/providers/pi/piProtocol.ts
+@@ -1,9 +1,16 @@
+-import type { Attachment, ToolPreview, TurnMetrics } from "../../../../features/sessions/model/session";
++import type {
++  Attachment,
++  ToolPreview,
++  TurnMetrics,
++} from "../../../../features/sessions/model/session";
+ import {
+   attachmentPathText,
+   promptText,
+ } from "../../../../features/sessions/model/attachments";
+-import type { AgentModel, ModelSetting } from "../../../../features/sessions/model/models";
++import type {
++  AgentModel,
++  ModelSetting,
++} from "../../../../features/sessions/model/models";
+ import { isTaskListToolName } from "../../../../features/sessions/model/taskList";
+ import type { PiFlavor } from "./piFlavor";
+ import { extractToolPreview, titleFromToolInput } from "../../core/preview";
+@@ -73,6 +80,14 @@ export type PiRpcResponse = {
+   data?: unknown;
+ };
+
++export type PiRpcChunk = {
++  chunkId: string;
++  index: number;
++  count: number;
++  byteLength: number;
++  data: string;
++};
++
+ export function asRecord(value: unknown): Record<string, unknown> | null {
+   if (value && typeof value === "object" && !Array.isArray(value)) {
+     return value as Record<string, unknown>;
+@@ -126,6 +141,48 @@ export function parseJsonLine(line: string): Record<string, unknown> | null {
+   }
+ }
+
++/** Parse an OMP RPC v2 chunk at the stdout boundary. */
++export function parseRpcChunk(rec: Record<string, unknown>): PiRpcChunk | null {
++  if (stringField(rec, "type") !== "rpc_chunk") return null;
++  const chunkId = stringField(rec, "chunkId");
++  const index = rec.index;
++  const count = rec.count;
++  const byteLength = rec.byteLength;
++  const data = rec.data;
++  if (
++    !chunkId ||
++    typeof index !== "number" ||
++    !Number.isInteger(index) ||
++    index < 0 ||
++    typeof count !== "number" ||
++    !Number.isInteger(count) ||
++    count <= 0 ||
++    count > 100_000 ||
++    index >= count ||
++    typeof byteLength !== "number" ||
++    !Number.isInteger(byteLength) ||
++    byteLength < 0 ||
++    typeof data !== "string"
++  ) {
++    return null;
++  }
++  return { chunkId, index, count, byteLength, data };
++}
++
++/** Decode one base64-encoded RPC v2 chunk without assuming UTF-8 boundaries. */
++export function decodeRpcChunkData(data: string): Uint8Array | null {
++  try {
++    const binary = atob(data);
++    const bytes = new Uint8Array(binary.length);
++    for (let index = 0; index < binary.length; index += 1) {
++      bytes[index] = binary.charCodeAt(index);
++    }
++    return bytes;
++  } catch {
++    return null;
++  }
++}
++
+ export function parsePiVersion(output: string): string | null {
+   const match = output.match(/\d+\.\d+\.\d+/);
+   return match?.[0] ?? null;
