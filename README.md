@@ -2,7 +2,7 @@
 
 Personal Homebrew tap for packages built or maintained by EndorFlem.
 VoiceInk, Odysseus, and the patched MonoCode build are source-built casks in
-this repository. Veilio is distributed as the official signed binary cask.
+this repository.
 
 ## VoiceInk source build
 
@@ -38,7 +38,6 @@ explicit SSH remote:
 brew tap EndorFlem/medovukha git@github.com:EndorFlem/Medovukha.git
 brew install EndorFlem/medovukha/voiceink-source
 brew install EndorFlem/medovukha/odysseus-source
-brew install --cask EndorFlem/medovukha/veilio
 ~~~
 
 The local checkout used to maintain the tap is:
@@ -163,22 +162,6 @@ The patched app uses the existing OMP installation and credentials. It does
 not install or configure model providers itself. Its source commit is checked
 weekly; the updater only advances it when the local RPC patch still applies.
 
-## Veilio binary cask
-
-Veilio is a privacy-first desktop AI assistant for meetings, transcription,
-screenshots, and screen-share-safe overlays. The cask uses the official
-Apple-Silicon DMG published on the Veilio website; it does not rebuild the
-application locally:
-
-~~~sh
-brew install --cask EndorFlem/medovukha/veilio
-~~~
-
-The weekly cask updater checks the official website for a newer versioned DMG,
-downloads it, calculates its SHA256, and updates the cask. Then ordinary
-`brew upgrade` installs the new version. The current upstream website exposes
-an Apple-Silicon DMG; no Intel macOS asset is currently linked there.
-
 ## Updates
 
 Once installed from the tap, the normal update command is:
@@ -189,10 +172,9 @@ brew upgrade
 
 The scheduled GitHub Action runs once a week on Monday at 03:17 UTC. It reads
 the latest commits on Beingpax/VoiceInk `main` and odysseus-dev/odysseus
-`main`, checks the official Veilio download page, downloads the corresponding
-archives, calculates their SHA256 values, and updates the managed casks. A
-changed version is then visible to ordinary `brew upgrade`, which runs the
-relevant installer again. The next launch of
+`main`, downloads the corresponding archives, calculates their SHA256 values,
+and updates both casks. A changed version is then visible to ordinary
+`brew upgrade`, which runs the relevant installer again. The next launch of
 `Odysseus-local.app` rebuilds/recreates the Docker stack from the new source.
 
 The version format is:
@@ -217,12 +199,10 @@ Medovukha/
 ├── Casks/voiceink-source.rb
 ├── Casks/odysseus-source.rb
 ├── Casks/monocode-source.rb
-├── Casks/veilio.rb
 ├── patches/monocode-omp-rpc-v2.patch
 ├── scripts/update-voiceink-cask.rb
 ├── scripts/update-odysseus-cask.rb
 ├── scripts/update-monocode-source-cask.rb
-├── scripts/update-veilio-cask.rb
 ├── .github/workflows/update-voiceink-cask.yml
 ├── .github/workflows/update-monocode-source-cask.yml
 ├── .gitignore

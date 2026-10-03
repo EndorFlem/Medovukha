@@ -1,4 +1,4 @@
-name: Update casks
+name: Update source casks
 
 on:
   schedule:
@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: update-casks
+  group: update-voiceink-cask
   cancel-in-progress: false
 
 jobs:
@@ -20,23 +20,22 @@ jobs:
       - name: Check out tap
         uses: actions/checkout@v5
 
-      - name: Update managed casks
+      - name: Update source casks
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           ruby scripts/update-voiceink-cask.rb
           ruby scripts/update-odysseus-cask.rb
-          ruby scripts/update-veilio-cask.rb
 
       - name: Commit and push changes
         run: |
-          if git diff --quiet -- Casks/voiceink-source.rb Casks/odysseus-source.rb Casks/veilio.rb; then
-            echo "Managed casks are already current."
+          if git diff --quiet -- Casks/voiceink-source.rb Casks/odysseus-source.rb; then
+            echo "Source casks are already current."
             exit 0
           fi
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add Casks/voiceink-source.rb Casks/odysseus-source.rb Casks/veilio.rb
-          git commit -m "casks: update managed applications"
+          git add Casks/voiceink-source.rb Casks/odysseus-source.rb
+          git commit -m "casks: update source builds"
           git push
