@@ -1,9 +1,9 @@
 cask "monocode-source" do
-  version "2026.10.05.112653-7933972"
-  sha256 "ea76829515c87ed3741f392dc1bb175bbe6fd4d8002dc22b12cd028034f6d559"
+  version "2026.10.12.115506-70fb3ea"
+  sha256 "0c057127369c4acb8c9e9c8bb8938ffd54b3da75c61b41d51036068eb6ccc6d5"
 
   # Managed by scripts/update-monocode-source-cask.rb.
-  monocode_upstream_revision = "7933972a5b86bdffad4b3414f1faf4c36103eff7"
+  monocode_upstream_revision = "70fb3ea54c66e30f2580183f4c1e0f7f0196252c"
   monocode_patch_url = "https://raw.githubusercontent.com/EndorFlem/Medovukha/main/patches/monocode-omp-rpc-v2.patch"
   monocode_patch_sha256 = "c816097d06112bfd065132f82556fa01e48f7aa4b8dd91d6fd15dcc497d6af77"
 
