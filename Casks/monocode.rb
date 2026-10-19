@@ -1,6 +1,6 @@
 cask "monocode" do
-  version "0.12.0"
-  sha256 "51566d32d93bdb571d49aa937ade8900b377db487ed69f015da5a4fa72f5b28c"
+  version "0.15.0"
+  sha256 "c3d54759650071fc1a5f3a5b7af5c4a52121a703253f090f8e01f89ecb677ef1"
 
   url "https://github.com/hardbeat920/monocode/releases/download/v#{version}/MonoCode_#{version}_aarch64.dmg"
   name "MonoCode"
