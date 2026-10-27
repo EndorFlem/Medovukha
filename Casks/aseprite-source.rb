@@ -1,8 +1,8 @@
 cask "aseprite-source" do
-  version "1.3.18.6"
+  version "1.3.18.6,1"
   sha256 "fa9dd07a0c2a5ec91a4166333296bbb9e5c237933b59875d0cfee849d2358306"
 
-  url "https://github.com/aseprite/aseprite/releases/download/v#{version}/Aseprite-v#{version}-Source.zip"
+  url "https://github.com/aseprite/aseprite/releases/download/v#{version.csv.first}/Aseprite-v#{version.csv.first}-Source.zip"
   name "Aseprite source build"
   desc "Locally built pixel art and animation editor"
   homepage "https://github.com/aseprite/aseprite"
@@ -22,7 +22,7 @@ cask "aseprite-source" do
     die() { printf 'Error: %s\n' "$*" >&2; exit 1; }
     user_home="${HOME:?HOME is required}"
     source_root="${1:?Missing staged source directory}"
-    target_app="$user_home/Applications/Aseprite-local.app"
+    target_app="$user_home/Applications/Aseprite.app"
     state_root="$user_home/Library/Application Support/Medovukha/Aseprite"
     skia_url="https://github.com/aseprite/skia/releases/download/m124-08a5439a6b/Skia-macOS-Release-arm64.zip"
     skia_sha="22663000967fc2c3f1a78190082228474955de02ffd13a352b39a48b204dac9a"
@@ -40,6 +40,24 @@ cask "aseprite-source" do
     xcodebuild -version >/dev/null 2>&1 || die "Full Xcode is required; set DEVELOPER_DIR to its Developer directory"
     sdk="$(xcrun --sdk macosx --show-sdk-path)" || die "macOS SDK not found"
     [ -d "$sdk" ] || die "macOS SDK directory not found: $sdk"
+
+    validate_target() {
+      if [ -e /Applications/Aseprite.app ] || [ -L /Applications/Aseprite.app ]; then
+        die "Another Aseprite.app exists in /Applications; resolve the conflict before installing"
+      fi
+      if pgrep -f "$target_app/Contents/MacOS/aseprite" >/dev/null; then
+        die "Quit Aseprite before upgrading"
+      fi
+      [ ! -L "$target_app" ] || die "Refusing to replace a symlink: $target_app"
+      if [ -e "$target_app" ]; then
+        [ -d "$target_app" ] || die "The destination is not an app directory: $target_app"
+        bundle_id="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$target_app/Contents/Info.plist" 2>/dev/null || true)"
+        [ "$bundle_id" = org.aseprite.Aseprite ] || die "Refusing to replace an unrelated app: $target_app"
+        [ "$(cat "$target_app/Contents/Resources/.medovukha-aseprite-source" 2>/dev/null || true)" = medovukha-aseprite-source ] || \
+          die "Refusing to replace an Aseprite app not installed by this cask: $target_app"
+      fi
+    }
+    validate_target
 
     work_dir="$(mktemp -d "${TMPDIR:-/tmp}/medovukha-aseprite.XXXXXXXX")"
     stage_dir=''
@@ -100,29 +118,23 @@ cask "aseprite-source" do
       iconutil -c icns "$iconset" -o "$resources/${icon_name}.icns"
     done
 
-    /usr/libexec/PlistBuddy -c 'Set :CFBundleIdentifier org.aseprite.Aseprite.local' "$built_app/Contents/Info.plist"
+    bundle_id="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$built_app/Contents/Info.plist")"
+    [ "$bundle_id" = org.aseprite.Aseprite ] || die "Unexpected upstream bundle identifier: $bundle_id"
+    printf 'medovukha-aseprite-source\n' > "$resources/.medovukha-aseprite-source"
     codesign --force --deep --sign - "$built_app"
     codesign --verify --deep --strict "$built_app"
-    if pgrep -f "$target_app/Contents/MacOS/aseprite" >/dev/null; then
-      die "Quit Aseprite-local before upgrading"
-    fi
+    validate_target
     mkdir -p "$user_home/Applications" "$state_root/backups"
-    [ ! -L "$target_app" ] || die "Refusing to replace a symlink: $target_app"
-    if [ -e "$target_app" ]; then
-      [ -d "$target_app" ] || die "The destination is not an app directory: $target_app"
-      bundle_id="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$target_app/Contents/Info.plist" 2>/dev/null || true)"
-      [ "$bundle_id" = org.aseprite.Aseprite.local ] || die "Refusing to replace an unrelated app: $target_app"
-    fi
 
     stage_dir="$(mktemp -d "$user_home/Applications/.aseprite-stage.XXXXXXXX")"
-    ditto "$built_app" "$stage_dir/Aseprite-local.app"
-    xattr -cr "$stage_dir/Aseprite-local.app" >/dev/null 2>&1 || true
+    ditto "$built_app" "$stage_dir/Aseprite.app"
+    xattr -cr "$stage_dir/Aseprite.app" >/dev/null 2>&1 || true
     if [ -d "$target_app" ]; then
       backup_dir="$(mktemp -d "$state_root/backups/aseprite.XXXXXXXX")"
-      backup="$backup_dir/Aseprite-local.app"
+      backup="$backup_dir/Aseprite.app"
       mv "$target_app" "$backup"
     fi
-    if ! mv "$stage_dir/Aseprite-local.app" "$target_app"; then
+    if ! mv "$stage_dir/Aseprite.app" "$target_app"; then
       [ -z "$backup" ] || mv "$backup" "$target_app" || true
       die "Could not install $target_app"
     fi
@@ -135,11 +147,31 @@ cask "aseprite-source" do
     args:       [staged_path],
   }
 
-  uninstall trash: "#{Dir.home}/Applications/Aseprite-local.app"
+  generated_script "check-aseprite-uninstall.sh", content: <<~'SH'
+    #!/bin/bash
+    set -eu
+    target_app="${HOME:?HOME is required}/Applications/Aseprite.app"
+    if [ ! -e "$target_app" ] && [ ! -L "$target_app" ]; then
+      exit 0
+    fi
+    [ ! -L "$target_app" ] || { printf 'Refusing to remove symlink: %s\n' "$target_app" >&2; exit 1; }
+    bundle_id="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$target_app/Contents/Info.plist" 2>/dev/null || true)"
+    marker="$(cat "$target_app/Contents/Resources/.medovukha-aseprite-source" 2>/dev/null || true)"
+    if [ "$bundle_id" != org.aseprite.Aseprite ] || [ "$marker" != medovukha-aseprite-source ]; then
+      printf 'Refusing to remove an app not installed by this cask: %s\n' "$target_app" >&2
+      exit 1
+    fi
+  SH
+
+  uninstall script: {
+              executable:   "check-aseprite-uninstall.sh",
+              must_succeed: true,
+            },
+            trash:  "#{Dir.home}/Applications/Aseprite.app"
 
   caveats <<~EOS
     Builds Aseprite locally for Apple Silicon. Full Xcode and the macOS SDK are required.
     The source license permits personal builds; see https://github.com/aseprite/aseprite/blob/main/EULA.txt.
-    The app is installed as ~/Applications/Aseprite-local.app.
+    The app is installed as ~/Applications/Aseprite.app.
   EOS
 end

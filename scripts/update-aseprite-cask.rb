@@ -23,8 +23,9 @@ version = match[1]
 cask = File.read(CASK_PATH)
 current = cask[/^  version "([^"]+)"$/, 1]
 abort "Cask version marker is missing" unless current
-abort "Refusing to downgrade #{current} to #{version}" if Gem::Version.new(version) < Gem::Version.new(current)
-if version == current
+current_upstream = current.split(",", 2).first
+abort "Refusing to downgrade #{current_upstream} to #{version}" if Gem::Version.new(version) < Gem::Version.new(current_upstream)
+if version == current_upstream
   puts "Aseprite source cask is already at #{tag}."
   exit 0
 end
@@ -49,7 +50,7 @@ Tempfile.create(["aseprite-source-", ".zip"]) do |file|
   abort "Review changed macOS bundle layout before updating" unless build_config.include?("bin/Aseprite.app/Contents/MacOS/aseprite")
   abort "Source archive is missing the laf submodule" unless manifest.lines.map(&:strip).include?("laf/CMakeLists.txt")
 
-  updated = cask.sub(/^  version "[^"]+"$/, "  version \"#{version}\"")
+  updated = cask.sub(/^  version "[^"]+"$/, "  version \"#{version},1\"")
   updated = updated.sub(/^  sha256 "[0-9a-f]{64}"$/, "  sha256 \"#{sha256}\"")
   abort "Cask update markers were incomplete" if updated == cask || !updated.include?("  sha256 \"#{sha256}\"")
 
