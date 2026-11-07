@@ -23,7 +23,7 @@ The installer:
 - compiles VoiceInk with Sparkle's updater code and metadata disabled;
 - on Swift 6.2.1/Xcode 26.2, pins mlx-swift to 0.31.4 and swift-syntax to
   602.0.0, whose manifests are compatible with that toolchain;
-- installs the result as ~/Applications/VoiceInk-local.app;
+- installs the result as ~/Applications/VoiceInk.app;
 - keeps build caches and rollback backups under
   ~/Library/Application Support/VoiceInkTap;
 - does not remove VoiceInk user data.

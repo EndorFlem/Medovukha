@@ -1,5 +1,5 @@
 cask "voiceink-source" do
-  version "2026.10.30.034213-19546d2a"
+  version "2026.10.30.034213-19546d2a,1"
   sha256 "f2baaf1e18e33a8371e1380aa59fcb220dfead9ce586ec5ef2f31cc721f90ab3"
 
   # Managed by scripts/update-voiceink-cask.rb.
@@ -38,7 +38,7 @@ cask "voiceink-source" do
 
     state_root="$user_home/Library/Application Support/VoiceInkTap"
     work_home="$state_root/build"
-    target_app="$user_home/Applications/VoiceInk-local.app"
+    target_app="$user_home/Applications/VoiceInk.app"
     mkdir -p "$state_root" "$work_home"
 
     lock_dir="$state_root/install.lock"
@@ -69,6 +69,12 @@ cask "voiceink-source" do
       if [ -d "/Applications/Xcode.app/Contents/Developer" ]; then
         export DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer"
       fi
+    fi
+    if pgrep -x VoiceInk >/dev/null 2>&1; then
+      die "VoiceInk is running; quit it before upgrading"
+    fi
+    if [ -e /Applications/VoiceInk.app ] || [ -L /Applications/VoiceInk.app ]; then
+      die "Another VoiceInk.app exists in /Applications; resolve the conflict before installing"
     fi
     xcodebuild -version >/dev/null 2>&1 || die "Full Xcode is required. Set DEVELOPER_DIR to an Xcode developer directory."
     /usr/bin/xcrun metal --version >/dev/null 2>&1 || \
@@ -345,11 +351,20 @@ cask "voiceink-source" do
     if [ -e "$target_app" ] && [ ! -d "$target_app" ]; then
       die "App destination is not a directory: $target_app"
     fi
+    if [ -e /Applications/VoiceInk.app ] || [ -L /Applications/VoiceInk.app ]; then
+      die "Another VoiceInk.app exists in /Applications; resolve the conflict before installing"
+    fi
+    if [ -d "$target_app" ]; then
+      existing_id="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$target_app/Contents/Info.plist" 2>/dev/null || true)"
+      existing_signature="$(codesign -dv --verbose=2 "$target_app" 2>&1 || true)"
+      [ "$existing_id" = com.prakashjoshipax.VoiceInk ] || die "Refusing to replace an unrelated app: $target_app"
+      printf '%s\n' "$existing_signature" | grep -Fq 'Signature=adhoc' || die "Refusing to replace a non-local VoiceInk app: $target_app"
+    fi
 
     backup_app=''
     if [ -d "$target_app" ]; then
       backup_dir="$state_root/backups/$(date -u '+%Y%m%dT%H%M%SZ')-$$"
-      backup_app="$backup_dir/VoiceInk-local.app"
+      backup_app="$backup_dir/VoiceInk.app"
       mkdir -p "$backup_dir"
       ditto "$target_app" "$backup_app"
       /bin/rm -rf "$target_app"
@@ -375,5 +390,25 @@ cask "voiceink-source" do
     args:       [staged_path],
   }
 
-  uninstall trash: "#{Dir.home}/Applications/VoiceInk-local.app"
+  generated_script "check-voiceink-uninstall.sh", content: <<~'SH'
+    #!/bin/bash
+    set -eu
+    target_app="${HOME:?HOME is required}/Applications/VoiceInk.app"
+    if [ ! -e "$target_app" ] && [ ! -L "$target_app" ]; then
+      exit 0
+    fi
+    [ ! -L "$target_app" ] || { printf 'Refusing to remove symlink: %s\n' "$target_app" >&2; exit 1; }
+    bundle_id="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$target_app/Contents/Info.plist" 2>/dev/null || true)"
+    signature="$(codesign -dv --verbose=2 "$target_app" 2>&1 || true)"
+    if [ "$bundle_id" != com.prakashjoshipax.VoiceInk ] || ! printf '%s\n' "$signature" | grep -Fq 'Signature=adhoc'; then
+      printf 'Refusing to remove a non-local VoiceInk app: %s\n' "$target_app" >&2
+      exit 1
+    fi
+  SH
+
+  uninstall script: {
+              executable:   "check-voiceink-uninstall.sh",
+              must_succeed: true,
+            },
+            trash:  "#{Dir.home}/Applications/VoiceInk.app"
 end
