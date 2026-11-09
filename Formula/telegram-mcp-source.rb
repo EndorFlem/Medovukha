@@ -2,12 +2,12 @@ class TelegramMcpSource < Formula
   desc "Telegram MCP server powered by Telethon"
   homepage "https://github.com/chigwell/telegram-mcp"
   # Managed by scripts/update-telegram-mcp-formula.rb.
-  telegram_mcp_upstream_tag = "v3.3.4"
-  # telegram_mcp_upstream_revision = "0246df8c3c99818d68f50e8591b2d3dda8363f81"
+  telegram_mcp_upstream_tag = "v3.3.12"
+  # telegram_mcp_upstream_revision = "9a886d78e82314b542097023f7357a90b744d8bf"
 
   url "https://github.com/chigwell/telegram-mcp/archive/refs/tags/#{telegram_mcp_upstream_tag}.tar.gz"
-  version "3.3.4"
-  sha256 "24bbd0b46742cd16e1d5898112f0417481b7c2b24c8d94d02ce8e4c78a52e0ea"
+  version "3.3.12"
+  sha256 "af1d63133a6397ff9500dd0547c74da4cf7ee6a7a504d9cb1ba6b4d18f12767d"
   license "Apache-2.0"
 
   # The project must come from this GitHub source archive. The PyPI project
