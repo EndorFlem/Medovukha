@@ -19,4 +19,11 @@ cask "antigravity-tools" do
 
   app "Antigravity Tools.app"
   binary "#{appdir}/Antigravity Tools.app/Contents/MacOS/antigravity-tools"
+
+  # Upstream ships a linker ad-hoc signature and documents this app-specific fix.
+  postflight_steps do
+    run "/usr/bin/xattr",
+        args:         ["-rd", "com.apple.quarantine", "{{appdir}}/Antigravity Tools.app"],
+        must_succeed: false
+  end
 end
