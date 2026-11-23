@@ -1,0 +1,35 @@
+name: Update Antigravity packages
+
+on:
+  schedule:
+    - cron: "37 4 * * 5"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-antigravity-packages
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check upstream releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ruby scripts/update-antigravity-packages.rb
+      - name: Commit updated packages
+        run: |
+          if git diff --quiet -- Formula/open-ag-patcher.rb Casks/antigravity-tools.rb; then
+            echo "Antigravity packages are already current."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/open-ag-patcher.rb Casks/antigravity-tools.rb
+          git commit -m "antigravity: update packages"
+          git pull --rebase origin main
+          git push origin HEAD:main
